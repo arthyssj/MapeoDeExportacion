@@ -1,7 +1,9 @@
 // --- ESTADO DE LA APLICACIÓN GENERADOR BASE---
 const MAX_CAPACIDAD = 28;
+const STORAGE_KEY = 'generadorCajaEstado';
 let totalTarimas = 0;
 let datosTrailer = []; // Array en memoria para exportar a Excel
+let editandoIndex = null; // Índice de la tarima que se está editando (null = ninguna)
 
 // --- REFERENCIAS AL DOM ---
 const inputCaja = document.getElementById('inputCaja');
@@ -9,6 +11,29 @@ const inputMaterial = document.getElementById('inputMaterial');
 const inputCantidad = document.getElementById('inputCantidad');
 const mapaTrailer = document.getElementById('mapa-trailer');
 const contadorTarimas = document.getElementById('contadorTarimas');
+
+// --- PERSISTENCIA (localStorage) ---
+// Evita perder el trabajo si se refresca la página o el navegador falla a medio conteo.
+function guardarEstado() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        numCaja: inputCaja.value,
+        datosTrailer: datosTrailer
+    }));
+}
+
+function cargarEstado() {
+    const guardado = localStorage.getItem(STORAGE_KEY);
+    if (!guardado) return;
+
+    try {
+        const estado = JSON.parse(guardado);
+        inputCaja.value = estado.numCaja || '';
+        datosTrailer = Array.isArray(estado.datosTrailer) ? estado.datosTrailer : [];
+    } catch (error) {
+        console.error('Error al recuperar el progreso guardado:', error);
+        localStorage.removeItem(STORAGE_KEY);
+    }
+}
 
 // --- NUEVA FUNCIÓN: ENCARGADA DE DIBUJAR TODO EL TRÁILER ---
 function renderizarTrailer() {
@@ -23,26 +48,88 @@ function renderizarTrailer() {
     datosTrailer.forEach((tarima, index) => {
         // Corrección automática de posición (por si borramos una intermedia, los números se reajustan de 1 a N)
         tarima.Posición_Tráiler = index + 1;
-        
+
         // Crear el elemento visual
         const nuevaTarima = document.createElement('div');
         nuevaTarima.className = 'tarima';
+
+        if (index === editandoIndex) {
+            // --- MODO EDICIÓN: reemplaza la tarima por un mini-formulario ---
+            nuevaTarima.classList.add('tarima-editando');
+            nuevaTarima.innerHTML = `
+                <input type="text" class="edit-material" value="${tarima.Número_Material}">
+                <input type="number" class="edit-cantidad" value="${tarima.Cantidad_Piezas}">
+                <div class="edit-acciones">
+                    <button class="btn-guardar-edicion" title="Guardar cambios">✓</button>
+                    <button class="btn-cancelar-edicion" title="Cancelar edición">×</button>
+                </div>
+            `;
+
+            const inputEditMaterial = nuevaTarima.querySelector('.edit-material');
+            const inputEditCantidad = nuevaTarima.querySelector('.edit-cantidad');
+
+            const guardarEdicion = function() {
+                const nuevoMaterial = inputEditMaterial.value.trim().toUpperCase();
+                const nuevaCantidad = parseInt(inputEditCantidad.value.trim());
+
+                if (!nuevoMaterial || isNaN(nuevaCantidad) || nuevaCantidad <= 0) {
+                    alert('Datos inválidos: revisa el material y la cantidad.');
+                    return;
+                }
+
+                tarima.Número_Material = nuevoMaterial;
+                tarima.Cantidad_Piezas = nuevaCantidad;
+                editandoIndex = null;
+                guardarEstado();
+                renderizarTrailer();
+            };
+
+            nuevaTarima.querySelector('.btn-guardar-edicion').addEventListener('click', guardarEdicion);
+            nuevaTarima.querySelector('.btn-cancelar-edicion').addEventListener('click', function() {
+                editandoIndex = null;
+                renderizarTrailer();
+            });
+
+            // Enter en cualquiera de los dos campos guarda los cambios
+            [inputEditMaterial, inputEditCantidad].forEach(function(campo) {
+                campo.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        guardarEdicion();
+                    }
+                });
+            });
+
+            mapaTrailer.appendChild(nuevaTarima);
+            inputEditMaterial.focus();
+            inputEditMaterial.select();
+            return;
+        }
+
         nuevaTarima.innerHTML = `
+            <button class="btn-editar-tarima" title="Editar esta tarima">✎</button>
             <button class="btn-eliminar-tarima" title="Eliminar esta tarima">×</button>
             <strong>${tarima.Número_Material}</strong>
             <span>${tarima.Cantidad_Piezas} pcs</span>
         `;
-        
+
         // ASIGNAR EVENTO DE ELIMINACIÓN A LA "X"
         const btnEliminar = nuevaTarima.querySelector('.btn-eliminar-tarima');
         btnEliminar.addEventListener('click', function() {
             // Borramos el elemento del arreglo usando su índice actual
             datosTrailer.splice(index, 1);
-            
+            guardarEstado();
+
             // ¡Magia! Volvemos a renderizar para que la pantalla se actualice sola
             renderizarTrailer();
         });
-        
+
+        // ASIGNAR EVENTO DE EDICIÓN AL LÁPIZ
+        nuevaTarima.querySelector('.btn-editar-tarima').addEventListener('click', function() {
+            editandoIndex = index;
+            renderizarTrailer();
+        });
+
         // Agregar al mapa del tráiler
         mapaTrailer.appendChild(nuevaTarima);
     });
@@ -105,7 +192,8 @@ inputCantidad.addEventListener('keypress', function(e) {
             "Cantidad_Piezas": parseInt(cantidad)
         });
 
-        // Llamar a nuestra función de dibujo
+        // Guardar progreso y llamar a nuestra función de dibujo
+        guardarEstado();
         renderizarTrailer();
 
         // Limpiar para el siguiente ciclo del escáner
@@ -114,6 +202,9 @@ inputCantidad.addEventListener('keypress', function(e) {
         inputMaterial.focus();
     }
 });
+
+// Guardar el número de caja a medida que se escribe/escanea
+inputCaja.addEventListener('input', guardarEstado);
 
 // --- LÓGICA DE EXPORTACIÓN Excel ---
 document.getElementById('btnExportar').addEventListener('click', function() {
@@ -189,14 +280,22 @@ document.getElementById('btnCancelar').addEventListener('click', function() {
         // Reiniciar variables
         totalTarimas = 0;
         datosTrailer = [];
-        
+        editandoIndex = null;
+
+        // Borrar también el progreso guardado
+        localStorage.removeItem(STORAGE_KEY);
+
         // Limpiar UI
         contadorTarimas.innerText = '0';
         mapaTrailer.innerHTML = ''; // Borra todos los cuadritos
         inputCaja.value = '';
         inputMaterial.value = '';
         inputCantidad.value = '';
-        
+
         inputCaja.focus();
     }
 });
+
+// --- RECUPERAR PROGRESO GUARDADO AL CARGAR LA PÁGINA ---
+cargarEstado();
+renderizarTrailer();
