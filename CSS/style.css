@@ -141,7 +141,9 @@ button {
 }
 
 .tabla-scroll {
-    max-height: 220px;
+    /* Crece con la altura de la pantalla para que se vean más materiales sin
+       scrollear, con tope mínimo/máximo para que no se rompa en pantallas chicas. */
+    max-height: clamp(300px, 60vh, 900px);
     overflow-y: auto;
     border-radius: 8px;
     background-color: #333;
