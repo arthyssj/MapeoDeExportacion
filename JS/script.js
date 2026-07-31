@@ -4,6 +4,7 @@ const STORAGE_KEY = 'generadorCajaEstado';
 let totalTarimas = 0;
 let datosTrailer = []; // Array en memoria para exportar a Excel
 let editandoIndex = null; // Índice de la tarima que se está editando (null = ninguna)
+let lineasEdicionTemp = null; // Copia de trabajo de los materiales de la tarima en edición
 
 // --- REFERENCIAS AL DOM ---
 const inputCaja = document.getElementById('inputCaja');
@@ -28,11 +29,34 @@ function cargarEstado() {
     try {
         const estado = JSON.parse(guardado);
         inputCaja.value = estado.numCaja || '';
-        datosTrailer = Array.isArray(estado.datosTrailer) ? estado.datosTrailer : [];
+        const datosCrudos = Array.isArray(estado.datosTrailer) ? estado.datosTrailer : [];
+
+        // Migración: versiones anteriores guardaban un solo material por tarima
+        // (Número_Material/Cantidad_Piezas planos) en vez del arreglo Materiales[].
+        datosTrailer = datosCrudos.map(function(tarima) {
+            if (Array.isArray(tarima.Materiales)) return tarima;
+            return {
+                Posición_Tráiler: tarima.Posición_Tráiler,
+                Materiales: [{
+                    Número_Material: tarima.Número_Material,
+                    Cantidad_Piezas: tarima.Cantidad_Piezas
+                }]
+            };
+        });
     } catch (error) {
         console.error('Error al recuperar el progreso guardado:', error);
         localStorage.removeItem(STORAGE_KEY);
     }
+}
+
+// Lee los valores actuales (sin validar) de las filas del formulario de edición
+function leerFilasEdicionDesdeDOM(contenedor) {
+    return Array.from(contenedor.querySelectorAll('.fila-material-edit')).map(function(fila) {
+        return {
+            Número_Material: fila.querySelector('.edit-material').value,
+            Cantidad_Piezas: fila.querySelector('.edit-cantidad').value
+        };
+    });
 }
 
 // --- NUEVA FUNCIÓN: ENCARGADA DE DIBUJAR TODO EL TRÁILER ---
@@ -54,32 +78,56 @@ function renderizarTrailer() {
         nuevaTarima.className = 'tarima';
 
         if (index === editandoIndex) {
-            // --- MODO EDICIÓN: reemplaza la tarima por un mini-formulario ---
+            // --- MODO EDICIÓN: mini-formulario con una fila por material ---
             nuevaTarima.classList.add('tarima-editando');
+
+            const filasHtml = lineasEdicionTemp.map(function(linea) {
+                return `
+                    <div class="fila-material-edit">
+                        <input type="text" class="edit-material" value="${linea.Número_Material}">
+                        <input type="number" class="edit-cantidad" value="${linea.Cantidad_Piezas}">
+                        <button class="btn-quitar-linea" title="Quitar este material">×</button>
+                    </div>
+                `;
+            }).join('');
+
             nuevaTarima.innerHTML = `
-                <input type="text" class="edit-material" value="${tarima.Número_Material}">
-                <input type="number" class="edit-cantidad" value="${tarima.Cantidad_Piezas}">
+                <div class="lineas-edicion">${filasHtml}</div>
+                <button class="btn-agregar-linea" type="button">+ Agregar material</button>
                 <div class="edit-acciones">
                     <button class="btn-guardar-edicion" title="Guardar cambios">✓</button>
                     <button class="btn-cancelar-edicion" title="Cancelar edición">×</button>
                 </div>
             `;
 
-            const inputEditMaterial = nuevaTarima.querySelector('.edit-material');
-            const inputEditCantidad = nuevaTarima.querySelector('.edit-cantidad');
-
             const guardarEdicion = function() {
-                const nuevoMaterial = inputEditMaterial.value.trim().toUpperCase();
-                const nuevaCantidad = parseInt(inputEditCantidad.value.trim());
+                const filas = leerFilasEdicionDesdeDOM(nuevaTarima);
+                const materialesValidados = [];
 
-                if (!nuevoMaterial || isNaN(nuevaCantidad) || nuevaCantidad <= 0) {
-                    alert('Datos inválidos: revisa el material y la cantidad.');
+                for (const fila of filas) {
+                    const matRaw = fila.Número_Material.trim();
+                    const cantRaw = String(fila.Cantidad_Piezas).trim();
+
+                    if (!matRaw && !cantRaw) continue; // fila vacía sin usar, se ignora
+
+                    const mat = matRaw.toUpperCase();
+                    const cant = parseInt(cantRaw);
+
+                    if (!mat || isNaN(cant) || cant <= 0) {
+                        alert('Revisa los materiales: cada línea necesita número de material y una cantidad válida (mayor a 0).');
+                        return;
+                    }
+                    materialesValidados.push({ Número_Material: mat, Cantidad_Piezas: cant });
+                }
+
+                if (materialesValidados.length === 0) {
+                    alert('La tarima debe tener al menos un material válido.');
                     return;
                 }
 
-                tarima.Número_Material = nuevoMaterial;
-                tarima.Cantidad_Piezas = nuevaCantidad;
+                tarima.Materiales = materialesValidados;
                 editandoIndex = null;
+                lineasEdicionTemp = null;
                 guardarEstado();
                 renderizarTrailer();
             };
@@ -87,30 +135,80 @@ function renderizarTrailer() {
             nuevaTarima.querySelector('.btn-guardar-edicion').addEventListener('click', guardarEdicion);
             nuevaTarima.querySelector('.btn-cancelar-edicion').addEventListener('click', function() {
                 editandoIndex = null;
+                lineasEdicionTemp = null;
                 renderizarTrailer();
             });
 
-            // Enter en cualquiera de los dos campos guarda los cambios
-            [inputEditMaterial, inputEditCantidad].forEach(function(campo) {
-                campo.addEventListener('keypress', function(e) {
+            nuevaTarima.querySelector('.btn-agregar-linea').addEventListener('click', function() {
+                lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
+                lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
+                renderizarTrailer();
+            });
+
+            nuevaTarima.querySelectorAll('.btn-quitar-linea').forEach(function(btn, i) {
+                btn.addEventListener('click', function() {
+                    lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
+                    if (lineasEdicionTemp.length <= 1) {
+                        alert('Una tarima debe tener al menos un material. Para quitarla por completo usa la "×" de la tarima.');
+                        return;
+                    }
+                    lineasEdicionTemp.splice(i, 1);
+                    renderizarTrailer();
+                });
+            });
+
+            const filasInputs = nuevaTarima.querySelectorAll('.fila-material-edit');
+            filasInputs.forEach(function(fila, i) {
+                const campoMaterial = fila.querySelector('.edit-material');
+                const campoCantidad = fila.querySelector('.edit-cantidad');
+
+                campoMaterial.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        guardarEdicion();
+                        campoCantidad.focus();
+                    }
+                });
+
+                campoCantidad.addEventListener('keypress', function(e) {
+                    if (e.key !== 'Enter') return;
+                    e.preventDefault();
+
+                    const esUltima = i === filasInputs.length - 1;
+                    if (esUltima) {
+                        // Enter en la última línea: agrega otra fila lista para escanear
+                        lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
+                        lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
+                        renderizarTrailer();
+                    } else {
+                        filasInputs[i + 1].querySelector('.edit-material').focus();
                     }
                 });
             });
 
             mapaTrailer.appendChild(nuevaTarima);
-            inputEditMaterial.focus();
-            inputEditMaterial.select();
+
+            // Enfocar la primera fila vacía si existe (recién agregada); si no, la primera fila
+            const indiceVacio = lineasEdicionTemp.findIndex(function(l) { return !l.Número_Material; });
+            const inputAEnfocar = filasInputs[indiceVacio >= 0 ? indiceVacio : 0].querySelector('.edit-material');
+            inputAEnfocar.focus();
+            inputAEnfocar.select();
             return;
         }
 
+        const lineasHtml = tarima.Materiales.map(function(m) {
+            return `
+                <div class="linea-material">
+                    <strong>${m.Número_Material}</strong>
+                    <span>${m.Cantidad_Piezas} pcs</span>
+                </div>
+            `;
+        }).join('');
+
         nuevaTarima.innerHTML = `
             <button class="btn-editar-tarima" title="Editar esta tarima">✎</button>
+            <button class="btn-agregar-material" title="Agregar otro material a esta tarima">+</button>
             <button class="btn-eliminar-tarima" title="Eliminar esta tarima">×</button>
-            <strong>${tarima.Número_Material}</strong>
-            <span>${tarima.Cantidad_Piezas} pcs</span>
+            <div class="lineas-material">${lineasHtml}</div>
         `;
 
         // ASIGNAR EVENTO DE ELIMINACIÓN A LA "X"
@@ -127,6 +225,19 @@ function renderizarTrailer() {
         // ASIGNAR EVENTO DE EDICIÓN AL LÁPIZ
         nuevaTarima.querySelector('.btn-editar-tarima').addEventListener('click', function() {
             editandoIndex = index;
+            lineasEdicionTemp = tarima.Materiales.map(function(m) {
+                return { Número_Material: m.Número_Material, Cantidad_Piezas: String(m.Cantidad_Piezas) };
+            });
+            renderizarTrailer();
+        });
+
+        // ASIGNAR EVENTO AL "+": entra en modo edición con una línea nueva lista para llenar
+        nuevaTarima.querySelector('.btn-agregar-material').addEventListener('click', function() {
+            editandoIndex = index;
+            lineasEdicionTemp = tarima.Materiales.map(function(m) {
+                return { Número_Material: m.Número_Material, Cantidad_Piezas: String(m.Cantidad_Piezas) };
+            });
+            lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
             renderizarTrailer();
         });
 
@@ -188,8 +299,9 @@ inputCantidad.addEventListener('keypress', function(e) {
         // Guardar los datos limpios
         datosTrailer.push({
             "Posición_Tráiler": datosTrailer.length + 1,
-            "Número_Material": material,
-            "Cantidad_Piezas": parseInt(cantidad)
+            "Materiales": [
+                { "Número_Material": material, "Cantidad_Piezas": parseInt(cantidad) }
+            ]
         });
 
         // Guardar progreso y llamar a nuestra función de dibujo
@@ -237,13 +349,18 @@ document.getElementById('btnExportar').addEventListener('click', function() {
         // Llenar las coordenadas exactas con los datos escaneados
         datosTrailer.forEach(tarima => {
             const index = tarima.Posición_Tráiler - 1; // Índice de 0 a 27
-            
+
             // Cálculos matemáticos simples para saber la celda exacta
             const filaExcel = Math.floor(index / 2) + 1; // +1 porque la fila 0 es el Frente
             const columnaExcel = index % 2; // 0 (Izquierda) o 1 (Derecha)
-            
+
+            // Si hay varios materiales en la misma tarima, se listan uno tras otro
+            const detalleMateriales = tarima.Materiales
+                .map(m => `${m.Número_Material} | ${m.Cantidad_Piezas} pcs`)
+                .join('  +  ');
+
             // Formatear el texto de cada cuadrito en el Excel
-            matrizMapa[filaExcel][columnaExcel] = `[T-${tarima.Posición_Tráiler}] ${tarima.Número_Material} | ${tarima.Cantidad_Piezas} pcs`;
+            matrizMapa[filaExcel][columnaExcel] = `[T-${tarima.Posición_Tráiler}] ${detalleMateriales}`;
         });
 
         // Puertas
@@ -251,13 +368,25 @@ document.getElementById('btnExportar').addEventListener('click', function() {
 
         // Convertir la matriz a hoja de Excel
         const hojaMapa = XLSX.utils.aoa_to_sheet(matrizMapa);
-        
+
         // Ajustar el ancho de las 2 columnas para que el texto no se corte
         hojaMapa['!cols'] = [{ wch: 35 }, { wch: 35 }];
 
 
         // --- HOJA 2: DATOS TABULARES ---
-        const hojaDatos = XLSX.utils.json_to_sheet(datosTrailer);
+        // Una fila por material: si una tarima tiene 2+ materiales, se generan 2+ filas
+        // con la misma Posición_Tráiler, para que el ETL no pierda ninguno.
+        const filasDatos = [];
+        datosTrailer.forEach(tarima => {
+            tarima.Materiales.forEach(m => {
+                filasDatos.push({
+                    "Posición_Tráiler": tarima.Posición_Tráiler,
+                    "Número_Material": m.Número_Material,
+                    "Cantidad_Piezas": m.Cantidad_Piezas
+                });
+            });
+        });
+        const hojaDatos = XLSX.utils.json_to_sheet(filasDatos);
 
 
         // --- ARMAR EL LIBRO DE EXCEL CON LAS DOS HOJAS ---
