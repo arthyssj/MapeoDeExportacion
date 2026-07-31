@@ -5,9 +5,22 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+:root {
+    /* Le avisa al navegador que la página YA es oscura, para que Brave/Chrome no le
+       apliquen su "modo oscuro forzado" (que repinta zonas y provoca cortes de color). */
+    color-scheme: dark;
+
+    /* El color de fondo también en la raíz: la franja que queda por debajo del
+       contenido la pinta el navegador, y así usa este color y no el suyo. */
+    background-color: #252526;
+}
+
 body {
     background-color: #252526;
     color: #ffffff;
+
+    /* Que el body cubra siempre la ventana completa, aunque haya pocas tarimas */
+    min-height: 100vh;
 }
 
 header {
