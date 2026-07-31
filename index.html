@@ -33,8 +33,32 @@
             </div>
 
             <div class="resumen">
-                <h2>Total Tarimas</h2>
-                <span id="contadorTarimas" class="numero-verde">0</span>
+                <div class="resumen-cifras">
+                    <div class="cifra">
+                        <h2>Total Tarimas</h2>
+                        <span id="contadorTarimas" class="numero-verde">0</span>
+                    </div>
+                    <div class="cifra">
+                        <h2>Total Piezas</h2>
+                        <span id="contadorPiezas" class="numero-azul">0</span>
+                    </div>
+                </div>
+
+                <div class="resumen-materiales">
+                    <h3>Resumen por material</h3>
+                    <div class="tabla-scroll">
+                        <table id="tabla-resumen">
+                            <thead>
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Tarimas</th>
+                                    <th>Piezas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpo-resumen"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 

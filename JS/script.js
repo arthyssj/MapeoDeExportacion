@@ -580,20 +580,23 @@ document.getElementById('btnExportar').addEventListener('click', function() {
 // --- BOTÓN CANCELAR / LIMPIAR ---
 document.getElementById('btnCancelar').addEventListener('click', function() {
     if(confirm("¿Estás seguro de que quieres borrar todo el progreso actual?")) {
-        // Reiniciar variables
-        totalTarimas = 0;
+        // Reiniciar el estado en memoria
         datosTrailer = [];
         editandoIndex = null;
+        lineasEdicionTemp = null;
 
         // Borrar también el progreso guardado
         localStorage.removeItem(STORAGE_KEY);
 
-        // Limpiar UI
-        contadorTarimas.innerText = '0';
-        mapaTrailer.innerHTML = ''; // Borra todos los cuadritos
+        // Limpiar los campos de captura
         inputCaja.value = '';
         inputMaterial.value = '';
         inputCantidad.value = '';
+
+        // Redibujar desde el estado ya vacío: esto limpia de una sola vez el mapa,
+        // el contador de tarimas, el total de piezas y la tabla de resumen.
+        // (Antes se limpiaba a mano y se olvidaban los elementos nuevos.)
+        renderizarTrailer();
 
         inputCaja.focus();
     }
