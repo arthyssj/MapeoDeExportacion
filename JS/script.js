@@ -12,6 +12,80 @@ const inputMaterial = document.getElementById('inputMaterial');
 const inputCantidad = document.getElementById('inputCantidad');
 const mapaTrailer = document.getElementById('mapa-trailer');
 const contadorTarimas = document.getElementById('contadorTarimas');
+const contadorPiezas = document.getElementById('contadorPiezas');
+const cuerpoResumen = document.getElementById('cuerpo-resumen');
+
+// Escapa el texto que se inserta con innerHTML. Un número de parte con comillas
+// o "<" rompería el HTML del formulario de edición y corrompería lo mostrado.
+function escaparHtml(texto) {
+    return String(texto).replace(/[&<>"']/g, function(caracter) {
+        return {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[caracter];
+    });
+}
+
+// Suma todas las piezas de todas las tarimas del tráiler
+function calcularTotalPiezas() {
+    return datosTrailer.reduce(function(total, tarima) {
+        return total + tarima.Materiales.reduce(function(suma, m) {
+            return suma + m.Cantidad_Piezas;
+        }, 0);
+    }, 0);
+}
+
+// Agrupa por número de parte: cuántas piezas en total y en cuántas tarimas viaja.
+// Es lo que se coteja contra el packing list.
+function calcularResumenMateriales() {
+    const acumulado = new Map();
+
+    datosTrailer.forEach(function(tarima) {
+        tarima.Materiales.forEach(function(m) {
+            if (!acumulado.has(m.Número_Material)) {
+                acumulado.set(m.Número_Material, { piezas: 0, posiciones: new Set() });
+            }
+            const registro = acumulado.get(m.Número_Material);
+            registro.piezas += m.Cantidad_Piezas;
+            registro.posiciones.add(tarima.Posición_Tráiler);
+        });
+    });
+
+    return Array.from(acumulado.entries())
+        .map(function(entrada) {
+            return {
+                material: entrada[0],
+                piezas: entrada[1].piezas,
+                tarimas: entrada[1].posiciones.size
+            };
+        })
+        .sort(function(a, b) { return a.material.localeCompare(b.material); });
+}
+
+// Dibuja el total de piezas y la tabla agrupada por número de parte
+function renderizarResumen() {
+    contadorPiezas.innerText = calcularTotalPiezas().toLocaleString('es-MX');
+
+    const resumen = calcularResumenMateriales();
+
+    if (resumen.length === 0) {
+        cuerpoResumen.innerHTML = '<tr><td colspan="3" class="resumen-vacio">Aún no hay materiales escaneados</td></tr>';
+        return;
+    }
+
+    cuerpoResumen.innerHTML = resumen.map(function(r) {
+        return `
+            <tr>
+                <td class="col-material">${escaparHtml(r.material)}</td>
+                <td class="col-num">${r.tarimas}</td>
+                <td class="col-num">${r.piezas.toLocaleString('es-MX')}</td>
+            </tr>
+        `;
+    }).join('');
+}
 
 // Reasigna Posición_Tráiler de 1 a N según el orden real del arreglo.
 // Se llama antes de guardar y antes de dibujar para que las posiciones nunca
@@ -81,6 +155,9 @@ function renderizarTrailer() {
     totalTarimas = datosTrailer.length;
     contadorTarimas.innerText = totalTarimas;
 
+    // Actualizar totales y el agrupado por número de parte
+    renderizarResumen();
+
     // 4. Recorrer el arreglo de datos y fabricar los cuadritos en el Grid
     datosTrailer.forEach((tarima, index) => {
         // Crear el elemento visual
@@ -94,8 +171,8 @@ function renderizarTrailer() {
             const filasHtml = lineasEdicionTemp.map(function(linea) {
                 return `
                     <div class="fila-material-edit">
-                        <input type="text" class="edit-material" value="${linea.Número_Material}">
-                        <input type="number" class="edit-cantidad" value="${linea.Cantidad_Piezas}">
+                        <input type="text" class="edit-material" value="${escaparHtml(linea.Número_Material)}">
+                        <input type="number" class="edit-cantidad" value="${escaparHtml(linea.Cantidad_Piezas)}">
                         <button class="btn-quitar-linea" title="Quitar este material">×</button>
                     </div>
                 `;
@@ -208,7 +285,7 @@ function renderizarTrailer() {
         const lineasHtml = tarima.Materiales.map(function(m) {
             return `
                 <div class="linea-material">
-                    <strong>${m.Número_Material}</strong>
+                    <strong>${escaparHtml(m.Número_Material)}</strong>
                     <span>${m.Cantidad_Piezas} pcs</span>
                 </div>
             `;
@@ -450,9 +527,30 @@ function generarExcel() {
         const hojaDatos = XLSX.utils.json_to_sheet(filasDatos);
 
 
-        // --- ARMAR EL LIBRO DE EXCEL CON LAS DOS HOJAS ---
+        // --- HOJA 3: RESUMEN POR NÚMERO DE PARTE ---
+        // Agrupado listo para cotejar contra el packing list, con gran total al final.
+        const filasResumen = calcularResumenMateriales().map(function(r) {
+            return {
+                "Número_Material": r.material,
+                "Tarimas": r.tarimas,
+                "Total_Piezas": r.piezas
+            };
+        });
+
+        filasResumen.push({
+            "Número_Material": "TOTAL GENERAL",
+            "Tarimas": datosTrailer.length,
+            "Total_Piezas": calcularTotalPiezas()
+        });
+
+        const hojaResumen = XLSX.utils.json_to_sheet(filasResumen);
+        hojaResumen['!cols'] = [{ wch: 28 }, { wch: 10 }, { wch: 14 }];
+
+
+        // --- ARMAR EL LIBRO DE EXCEL CON LAS TRES HOJAS ---
         const libro = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(libro, hojaMapa, "Mapa_Visual");
+        XLSX.utils.book_append_sheet(libro, hojaResumen, "Resumen");
         XLSX.utils.book_append_sheet(libro, hojaDatos, "Datos_ETL");
 
         // --- DESCARGAR EL ARCHIVO NATIVAMENTE ---
