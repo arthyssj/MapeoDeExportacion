@@ -13,9 +13,19 @@ const inputCantidad = document.getElementById('inputCantidad');
 const mapaTrailer = document.getElementById('mapa-trailer');
 const contadorTarimas = document.getElementById('contadorTarimas');
 
+// Reasigna Posición_Tráiler de 1 a N según el orden real del arreglo.
+// Se llama antes de guardar y antes de dibujar para que las posiciones nunca
+// queden desfasadas (p. ej. al borrar una tarima intermedia).
+function renumerarPosiciones() {
+    datosTrailer.forEach(function(tarima, i) {
+        tarima.Posición_Tráiler = i + 1;
+    });
+}
+
 // --- PERSISTENCIA (localStorage) ---
 // Evita perder el trabajo si se refresca la página o el navegador falla a medio conteo.
 function guardarEstado() {
+    renumerarPosiciones();
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
         numCaja: inputCaja.value,
         datosTrailer: datosTrailer
@@ -63,16 +73,16 @@ function leerFilasEdicionDesdeDOM(contenedor) {
 function renderizarTrailer() {
     // 1. Limpiar por completo el contenedor visual para volverlo a armar
     mapaTrailer.innerHTML = '';
-    
-    // 2. Sincronizar el contador global con el tamaño real del arreglo
+
+    // 2. Corregir las posiciones (por si borramos una intermedia, se reajustan de 1 a N)
+    renumerarPosiciones();
+
+    // 3. Sincronizar el contador global con el tamaño real del arreglo
     totalTarimas = datosTrailer.length;
     contadorTarimas.innerText = totalTarimas;
-    
-    // 3. Recorrer el arreglo de datos y fabricar los cuadritos en el Grid
-    datosTrailer.forEach((tarima, index) => {
-        // Corrección automática de posición (por si borramos una intermedia, los números se reajustan de 1 a N)
-        tarima.Posición_Tráiler = index + 1;
 
+    // 4. Recorrer el arreglo de datos y fabricar los cuadritos en el Grid
+    datosTrailer.forEach((tarima, index) => {
         // Crear el elemento visual
         const nuevaTarima = document.createElement('div');
         nuevaTarima.className = 'tarima';
@@ -214,6 +224,17 @@ function renderizarTrailer() {
         // ASIGNAR EVENTO DE ELIMINACIÓN A LA "X"
         const btnEliminar = nuevaTarima.querySelector('.btn-eliminar-tarima');
         btnEliminar.addEventListener('click', function() {
+            // Confirmar antes de borrar, mostrando el detalle de lo que se va a perder.
+            // La "×" queda a unos pocos píxeles del "✎" y del "+", así que un clic
+            // accidental podría tirar una tarima con varios materiales.
+            const detalle = tarima.Materiales
+                .map(function(m) { return `  • ${m.Número_Material} — ${m.Cantidad_Piezas} pcs`; })
+                .join('\n');
+
+            if (!confirm(`¿Eliminar la tarima T-${tarima.Posición_Tráiler}?\n\n${detalle}`)) {
+                return;
+            }
+
             // Borramos el elemento del arreglo usando su índice actual
             datosTrailer.splice(index, 1);
 
