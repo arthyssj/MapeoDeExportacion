@@ -46,7 +46,10 @@
         </section>
     </main>
 
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <!-- SheetJS (generador de Excel). Se intenta desde el CDN con "async" para que la falta
+         de internet no retrase la carga de la app. Si no llega a cargar, script.js recurre
+         automáticamente a la copia local en ./JS/xlsx.full.min.js -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js" async></script>
     <script src="./JS/script.js"></script>
 </body>
 </html>

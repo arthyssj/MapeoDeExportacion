@@ -216,6 +216,20 @@ function renderizarTrailer() {
         btnEliminar.addEventListener('click', function() {
             // Borramos el elemento del arreglo usando su índice actual
             datosTrailer.splice(index, 1);
+
+            // Al quitar una tarima, todas las de atrás recorren su índice una posición.
+            // Si había otra tarima abierta en modo edición hay que reajustar el puntero,
+            // porque si no terminaríamos guardando esos materiales en la tarima equivocada.
+            if (editandoIndex !== null) {
+                if (index === editandoIndex) {
+                    // Se borró justamente la que se estaba editando: cerramos el formulario
+                    editandoIndex = null;
+                    lineasEdicionTemp = null;
+                } else if (index < editandoIndex) {
+                    editandoIndex--;
+                }
+            }
+
             guardarEstado();
 
             // ¡Magia! Volvemos a renderizar para que la pantalla se actualice sola
@@ -318,13 +332,39 @@ inputCantidad.addEventListener('keypress', function(e) {
 // Guardar el número de caja a medida que se escribe/escanea
 inputCaja.addEventListener('input', guardarEstado);
 
-// --- LÓGICA DE EXPORTACIÓN Excel ---
-document.getElementById('btnExportar').addEventListener('click', function() {
-    if (datosTrailer.length === 0) {
-        alert("No hay datos para exportar. Escanea al menos una tarima.");
-        return;
-    }
+// --- CARGA DEL GENERADOR DE EXCEL (SheetJS) CON RESPALDO LOCAL ---
+// index.html intenta bajar SheetJS del CDN. Si no hay internet o el firewall lo bloquea,
+// aquí se carga la copia local del repo para que exportar siga funcionando sin conexión.
+let cargaXlsxEnCurso = null;
 
+function asegurarXLSX() {
+    // El CDN ya cargó: no hay nada que hacer
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+
+    // Ya se está cargando la copia local: reutilizamos la misma promesa
+    if (cargaXlsxEnCurso) return cargaXlsxEnCurso;
+
+    cargaXlsxEnCurso = new Promise(function(resolve, reject) {
+        const etiqueta = document.createElement('script');
+        etiqueta.src = './JS/xlsx.full.min.js';
+        etiqueta.onload = function() {
+            if (typeof XLSX !== 'undefined') {
+                resolve();
+            } else {
+                reject(new Error('La copia local de SheetJS no definió XLSX.'));
+            }
+        };
+        etiqueta.onerror = function() {
+            reject(new Error('No se pudo cargar la copia local de SheetJS.'));
+        };
+        document.head.appendChild(etiqueta);
+    });
+
+    return cargaXlsxEnCurso;
+}
+
+// --- LÓGICA DE EXPORTACIÓN Excel ---
+function generarExcel() {
     // 1. Generar nombre de archivo dinámico
     const numCaja = inputCaja.value.trim().toUpperCase() || 'SINNUM';
     const hoy = new Date();
@@ -401,6 +441,21 @@ document.getElementById('btnExportar').addEventListener('click', function() {
         console.error("Error crítico al generar Excel:", error);
         alert("Hubo un problema al generar el archivo. Presiona F12 para ver el error.");
     }
+}
+
+document.getElementById('btnExportar').addEventListener('click', function() {
+    if (datosTrailer.length === 0) {
+        alert("No hay datos para exportar. Escanea al menos una tarima.");
+        return;
+    }
+
+    // Nos aseguramos de tener SheetJS (CDN o copia local) antes de armar el archivo
+    asegurarXLSX()
+        .then(generarExcel)
+        .catch(function(error) {
+            console.error('No se pudo cargar SheetJS:', error);
+            alert('No se pudo cargar el generador de Excel.\n\nRevisa que exista el archivo JS/xlsx.full.min.js junto a la página.');
+        });
 });
 
 // --- BOTÓN CANCELAR / LIMPIAR ---
