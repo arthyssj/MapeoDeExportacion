@@ -581,7 +581,7 @@ function generarExcel() {
     const anio = hoy.getFullYear();
     const mes = String(hoy.getMonth() + 1).padStart(2, '0');
     const dia = String(hoy.getDate()).padStart(2, '0');
-    const nombreSugerido = `${titulo}-${anio}-${mes}-${dia}.xlsx`;
+    const nombreSugerido = `${titulo}-${mes}-${dia}-${anio}.xlsx`;
 
     try {
         // --- HOJA 1: MAPA VISUAL ---
