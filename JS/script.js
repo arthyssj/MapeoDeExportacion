@@ -5,6 +5,16 @@ let totalTarimas = 0;
 let datosTrailer = []; // Array en memoria para exportar a Excel
 let editandoIndex = null; // Índice de la tarima que se está editando (null = ninguna)
 let lineasEdicionTemp = null; // Copia de trabajo de los materiales de la tarima en edición
+// 'editar'  -> lineasEdicionTemp trae TODOS los materiales y los reemplaza al guardar
+// 'agregar' -> lineasEdicionTemp trae SÓLO lo nuevo y se suma a los que ya tiene la tarima
+let modoEdicion = null;
+
+// Cierra cualquier formulario abierto (edición o alta de material)
+function cerrarFormulario() {
+    editandoIndex = null;
+    lineasEdicionTemp = null;
+    modoEdicion = null;
+}
 
 // --- REFERENCIAS AL DOM ---
 const inputCaja = document.getElementById('inputCaja');
@@ -177,8 +187,23 @@ function renderizarTrailer() {
         nuevaTarima.className = 'tarima';
 
         if (index === editandoIndex) {
-            // --- MODO EDICIÓN: mini-formulario con una fila por material ---
+            // --- FORMULARIO: editar los materiales o agregar uno nuevo ---
+            const esAlta = modoEdicion === 'agregar';
             nuevaTarima.classList.add('tarima-editando');
+
+            // Al agregar, los materiales que ya tiene la tarima se muestran sólo de
+            // referencia (no editables), para no repetir el formulario de edición.
+            const existentesHtml = esAlta
+                ? `<div class="lineas-existentes">` + tarima.Materiales.map(function(m) {
+                        return `
+                            <div class="linea-existente">
+                                <strong>${escaparHtml(m.Número_Material)}</strong>
+                                <span>${m.Cantidad_Piezas} pcs</span>
+                            </div>
+                        `;
+                    }).join('') + `</div>
+                    <div class="rotulo-alta">Nuevo material</div>`
+                : '';
 
             const filasHtml = lineasEdicionTemp.map(function(linea) {
                 return `
@@ -194,11 +219,12 @@ function renderizarTrailer() {
             }).join('');
 
             nuevaTarima.innerHTML = `
+                ${existentesHtml}
                 <div class="lineas-edicion">${filasHtml}</div>
-                <button class="btn-agregar-linea" type="button">+ Agregar material</button>
+                <button class="btn-agregar-linea" type="button">+ Otro material</button>
                 <div class="edit-acciones">
-                    <button class="btn-guardar-edicion" title="Guardar cambios">✓</button>
-                    <button class="btn-cancelar-edicion" title="Cancelar edición">×</button>
+                    <button class="btn-guardar-edicion" title="${esAlta ? 'Agregar a la tarima' : 'Guardar cambios'}">✓</button>
+                    <button class="btn-cancelar-edicion" title="Cancelar">×</button>
                 </div>
             `;
 
@@ -230,21 +256,25 @@ function renderizarTrailer() {
                 }
 
                 if (materialesValidados.length === 0) {
-                    alert('La tarima debe tener al menos un material válido.');
+                    alert(esAlta
+                        ? 'Captura el material que quieres agregar, o cierra con la "×".'
+                        : 'La tarima debe tener al menos un material válido.');
                     return;
                 }
 
-                tarima.Materiales = materialesValidados;
-                editandoIndex = null;
-                lineasEdicionTemp = null;
+                // Al agregar sumamos a lo que ya traía; al editar reemplazamos todo
+                tarima.Materiales = esAlta
+                    ? tarima.Materiales.concat(materialesValidados)
+                    : materialesValidados;
+
+                cerrarFormulario();
                 guardarEstado();
                 renderizarTrailer();
             };
 
             nuevaTarima.querySelector('.btn-guardar-edicion').addEventListener('click', guardarEdicion);
             nuevaTarima.querySelector('.btn-cancelar-edicion').addEventListener('click', function() {
-                editandoIndex = null;
-                lineasEdicionTemp = null;
+                cerrarFormulario();
                 renderizarTrailer();
             });
 
@@ -257,10 +287,18 @@ function renderizarTrailer() {
             nuevaTarima.querySelectorAll('.btn-quitar-linea').forEach(function(btn, i) {
                 btn.addEventListener('click', function() {
                     lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
+
                     if (lineasEdicionTemp.length <= 1) {
+                        if (esAlta) {
+                            // Quitar la única línea nueva equivale a cancelar el alta
+                            cerrarFormulario();
+                            renderizarTrailer();
+                            return;
+                        }
                         alert('Una tarima debe tener al menos un material. Para quitarla por completo usa la "×" de la tarima.');
                         return;
                     }
+
                     lineasEdicionTemp.splice(i, 1);
                     renderizarTrailer();
                 });
@@ -363,8 +401,7 @@ function renderizarTrailer() {
             if (editandoIndex !== null) {
                 if (index === editandoIndex) {
                     // Se borró justamente la que se estaba editando: cerramos el formulario
-                    editandoIndex = null;
-                    lineasEdicionTemp = null;
+                    cerrarFormulario();
                 } else if (index < editandoIndex) {
                     editandoIndex--;
                 }
@@ -376,9 +413,10 @@ function renderizarTrailer() {
             renderizarTrailer();
         });
 
-        // ASIGNAR EVENTO DE EDICIÓN AL LÁPIZ
+        // ASIGNAR EVENTO DE EDICIÓN AL LÁPIZ: trae todos los materiales para modificarlos
         nuevaTarima.querySelector('.btn-editar-tarima').addEventListener('click', function() {
             editandoIndex = index;
+            modoEdicion = 'editar';
             lineasEdicionTemp = tarima.Materiales.map(function(m) {
                 return {
                     Número_Material: m.Número_Material,
@@ -389,17 +427,12 @@ function renderizarTrailer() {
             renderizarTrailer();
         });
 
-        // ASIGNAR EVENTO AL "+": entra en modo edición con una línea nueva lista para llenar
+        // ASIGNAR EVENTO AL "+": va DIRECTO al alta, con una sola línea en blanco.
+        // Los materiales que ya trae la tarima no se vuelven a abrir para editar.
         nuevaTarima.querySelector('.btn-agregar-material').addEventListener('click', function() {
             editandoIndex = index;
-            lineasEdicionTemp = tarima.Materiales.map(function(m) {
-                return {
-                    Número_Material: m.Número_Material,
-                    Cantidad_Piezas: String(m.Cantidad_Piezas),
-                    Referencia: m.Referencia || ''
-                };
-            });
-            lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
+            modoEdicion = 'agregar';
+            lineasEdicionTemp = [{ Número_Material: '', Cantidad_Piezas: '', Referencia: '' }];
             renderizarTrailer();
         });
 
@@ -666,8 +699,7 @@ document.getElementById('btnCancelar').addEventListener('click', function() {
     if(confirm("¿Estás seguro de que quieres borrar todo el progreso actual?")) {
         // Reiniciar el estado en memoria
         datosTrailer = [];
-        editandoIndex = null;
-        lineasEdicionTemp = null;
+        cerrarFormulario();
 
         // Borrar también el progreso guardado
         localStorage.removeItem(STORAGE_KEY);

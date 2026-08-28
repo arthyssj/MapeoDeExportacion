@@ -402,6 +402,48 @@ button {
     padding: 6px 4px 4px;
 }
 
+/* Materiales que la tarima ya tiene, mostrados sólo como contexto al agregar uno nuevo */
+.lineas-existentes {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-bottom: 4px;
+}
+
+.linea-existente {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    font-size: 11px;
+    color: #7a6a45;
+}
+
+.linea-existente strong {
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.linea-existente span {
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+.rotulo-alta {
+    width: 100%;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #b9770e;
+    border-top: 1px solid #e0c48a;
+    padding-top: 3px;
+    margin-bottom: 3px;
+}
+
 .lineas-edicion {
     width: 100%;
     min-width: 0;
