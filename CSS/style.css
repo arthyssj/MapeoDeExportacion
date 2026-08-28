@@ -281,14 +281,26 @@ button {
 }
 
 .linea-material {
+    width: 100%;
+    min-width: 0;
+    border-top: 1px dashed #bbb;
+    padding-top: 2px;
+}
+
+.linea-encabezado {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 6px;
     width: 100%;
     min-width: 0;
-    border-top: 1px dashed #bbb;
-    padding-top: 2px;
+}
+
+.linea-ref {
+    font-size: 10px;
+    color: #5a5a5a;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
 }
 
 .linea-material:first-child {
@@ -400,6 +412,21 @@ button {
 
 .fila-material-edit {
     display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+    padding-bottom: 3px;
+    border-bottom: 1px dashed #e0c48a;
+}
+
+.fila-material-edit:last-child {
+    border-bottom: none;
+}
+
+/* Material y cantidad comparten renglón; la referencia va debajo a todo lo ancho */
+.fila-edit-top {
+    display: flex;
     align-items: center;
     gap: 3px;
     width: 100%;
@@ -408,6 +435,7 @@ button {
 
 .fila-material-edit .edit-material { flex: 3; min-width: 0; }
 .fila-material-edit .edit-cantidad { flex: 2; min-width: 0; }
+.fila-material-edit .edit-referencia { width: 100%; }
 
 .tarima-editando input {
     min-width: 0;

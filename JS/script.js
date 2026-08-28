@@ -10,6 +10,7 @@ let lineasEdicionTemp = null; // Copia de trabajo de los materiales de la tarima
 const inputCaja = document.getElementById('inputCaja');
 const inputMaterial = document.getElementById('inputMaterial');
 const inputCantidad = document.getElementById('inputCantidad');
+const inputReferencia = document.getElementById('inputReferencia');
 const mapaTrailer = document.getElementById('mapa-trailer');
 const contadorTarimas = document.getElementById('contadorTarimas');
 const contadorPiezas = document.getElementById('contadorPiezas');
@@ -116,15 +117,25 @@ function cargarEstado() {
         const datosCrudos = Array.isArray(estado.datosTrailer) ? estado.datosTrailer : [];
 
         // Migración: versiones anteriores guardaban un solo material por tarima
-        // (Número_Material/Cantidad_Piezas planos) en vez del arreglo Materiales[].
+        // (Número_Material/Cantidad_Piezas planos) en vez del arreglo Materiales[],
+        // y todavía no existía el campo Referencia.
         datosTrailer = datosCrudos.map(function(tarima) {
-            if (Array.isArray(tarima.Materiales)) return tarima;
-            return {
-                Posición_Tráiler: tarima.Posición_Tráiler,
-                Materiales: [{
+            const materiales = Array.isArray(tarima.Materiales)
+                ? tarima.Materiales
+                : [{
                     Número_Material: tarima.Número_Material,
                     Cantidad_Piezas: tarima.Cantidad_Piezas
-                }]
+                }];
+
+            return {
+                Posición_Tráiler: tarima.Posición_Tráiler,
+                Materiales: materiales.map(function(m) {
+                    return {
+                        Número_Material: m.Número_Material,
+                        Cantidad_Piezas: m.Cantidad_Piezas,
+                        Referencia: m.Referencia || ''
+                    };
+                })
             };
         });
     } catch (error) {
@@ -138,7 +149,8 @@ function leerFilasEdicionDesdeDOM(contenedor) {
     return Array.from(contenedor.querySelectorAll('.fila-material-edit')).map(function(fila) {
         return {
             Número_Material: fila.querySelector('.edit-material').value,
-            Cantidad_Piezas: fila.querySelector('.edit-cantidad').value
+            Cantidad_Piezas: fila.querySelector('.edit-cantidad').value,
+            Referencia: fila.querySelector('.edit-referencia').value
         };
     });
 }
@@ -171,9 +183,12 @@ function renderizarTrailer() {
             const filasHtml = lineasEdicionTemp.map(function(linea) {
                 return `
                     <div class="fila-material-edit">
-                        <input type="text" class="edit-material" value="${escaparHtml(linea.Número_Material)}">
-                        <input type="number" class="edit-cantidad" value="${escaparHtml(linea.Cantidad_Piezas)}">
-                        <button class="btn-quitar-linea" title="Quitar este material">×</button>
+                        <div class="fila-edit-top">
+                            <input type="text" class="edit-material" value="${escaparHtml(linea.Número_Material)}" title="Material">
+                            <input type="number" class="edit-cantidad" value="${escaparHtml(linea.Cantidad_Piezas)}" title="Cantidad">
+                            <button class="btn-quitar-linea" title="Quitar este material">×</button>
+                        </div>
+                        <input type="text" class="edit-referencia" value="${escaparHtml(linea.Referencia || '')}" placeholder="Referencia" title="Referencia">
                     </div>
                 `;
             }).join('');
@@ -194,17 +209,24 @@ function renderizarTrailer() {
                 for (const fila of filas) {
                     const matRaw = fila.Número_Material.trim();
                     const cantRaw = String(fila.Cantidad_Piezas).trim();
+                    const refRaw = String(fila.Referencia || '').trim();
 
-                    if (!matRaw && !cantRaw) continue; // fila vacía sin usar, se ignora
+                    // fila vacía sin usar, se ignora
+                    if (!matRaw && !cantRaw && !refRaw) continue;
 
                     const mat = matRaw.toUpperCase();
                     const cant = parseInt(cantRaw);
+                    const ref = refRaw.toUpperCase();
 
-                    if (!mat || isNaN(cant) || cant <= 0) {
-                        alert('Revisa los materiales: cada línea necesita número de material y una cantidad válida (mayor a 0).');
+                    if (!mat || isNaN(cant) || cant <= 0 || !ref) {
+                        alert('Revisa los materiales: cada línea necesita número de material, una cantidad válida (mayor a 0) y referencia.');
                         return;
                     }
-                    materialesValidados.push({ Número_Material: mat, Cantidad_Piezas: cant });
+                    materialesValidados.push({
+                        Número_Material: mat,
+                        Cantidad_Piezas: cant,
+                        Referencia: ref
+                    });
                 }
 
                 if (materialesValidados.length === 0) {
@@ -228,7 +250,7 @@ function renderizarTrailer() {
 
             nuevaTarima.querySelector('.btn-agregar-linea').addEventListener('click', function() {
                 lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
-                lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
+                lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '', Referencia: '' });
                 renderizarTrailer();
             });
 
@@ -248,7 +270,9 @@ function renderizarTrailer() {
             filasInputs.forEach(function(fila, i) {
                 const campoMaterial = fila.querySelector('.edit-material');
                 const campoCantidad = fila.querySelector('.edit-cantidad');
+                const campoReferencia = fila.querySelector('.edit-referencia');
 
+                // Misma cadena que el panel de captura: material -> cantidad -> referencia
                 campoMaterial.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -257,6 +281,13 @@ function renderizarTrailer() {
                 });
 
                 campoCantidad.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        campoReferencia.focus();
+                    }
+                });
+
+                campoReferencia.addEventListener('keypress', function(e) {
                     if (e.key !== 'Enter') return;
                     e.preventDefault();
 
@@ -264,7 +295,7 @@ function renderizarTrailer() {
                     if (esUltima) {
                         // Enter en la última línea: agrega otra fila lista para escanear
                         lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
-                        lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
+                        lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '', Referencia: '' });
                         renderizarTrailer();
                     } else {
                         filasInputs[i + 1].querySelector('.edit-material').focus();
@@ -283,10 +314,18 @@ function renderizarTrailer() {
         }
 
         const lineasHtml = tarima.Materiales.map(function(m) {
+            // La referencia sólo se dibuja si existe (los datos migrados no la traen)
+            const refHtml = m.Referencia
+                ? `<div class="linea-ref">Ref: ${escaparHtml(m.Referencia)}</div>`
+                : '';
+
             return `
                 <div class="linea-material">
-                    <strong>${escaparHtml(m.Número_Material)}</strong>
-                    <span>${m.Cantidad_Piezas} pcs</span>
+                    <div class="linea-encabezado">
+                        <strong>${escaparHtml(m.Número_Material)}</strong>
+                        <span>${m.Cantidad_Piezas} pcs</span>
+                    </div>
+                    ${refHtml}
                 </div>
             `;
         }).join('');
@@ -305,7 +344,10 @@ function renderizarTrailer() {
             // La "×" queda a unos pocos píxeles del "✎" y del "+", así que un clic
             // accidental podría tirar una tarima con varios materiales.
             const detalle = tarima.Materiales
-                .map(function(m) { return `  • ${m.Número_Material} — ${m.Cantidad_Piezas} pcs`; })
+                .map(function(m) {
+                    const ref = m.Referencia ? ` — Ref: ${m.Referencia}` : '';
+                    return `  • ${m.Número_Material} — ${m.Cantidad_Piezas} pcs${ref}`;
+                })
                 .join('\n');
 
             if (!confirm(`¿Eliminar la tarima T-${tarima.Posición_Tráiler}?\n\n${detalle}`)) {
@@ -338,7 +380,11 @@ function renderizarTrailer() {
         nuevaTarima.querySelector('.btn-editar-tarima').addEventListener('click', function() {
             editandoIndex = index;
             lineasEdicionTemp = tarima.Materiales.map(function(m) {
-                return { Número_Material: m.Número_Material, Cantidad_Piezas: String(m.Cantidad_Piezas) };
+                return {
+                    Número_Material: m.Número_Material,
+                    Cantidad_Piezas: String(m.Cantidad_Piezas),
+                    Referencia: m.Referencia || ''
+                };
             });
             renderizarTrailer();
         });
@@ -347,7 +393,11 @@ function renderizarTrailer() {
         nuevaTarima.querySelector('.btn-agregar-material').addEventListener('click', function() {
             editandoIndex = index;
             lineasEdicionTemp = tarima.Materiales.map(function(m) {
-                return { Número_Material: m.Número_Material, Cantidad_Piezas: String(m.Cantidad_Piezas) };
+                return {
+                    Número_Material: m.Número_Material,
+                    Cantidad_Piezas: String(m.Cantidad_Piezas),
+                    Referencia: m.Referencia || ''
+                };
             });
             lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '' });
             renderizarTrailer();
@@ -382,28 +432,51 @@ inputMaterial.addEventListener('keypress', function(e) {
 
 
 
-// Escanear Cantidad: Procesa, Dibuja y Regresa a Material
+// Escanear Cantidad: valida y pasa a Referencia
 inputCantidad.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+
+        const cantidad = parseInt(inputCantidad.value.trim());
+
+        if (isNaN(cantidad) || cantidad <= 0) {
+            alert("Cantidad inválida");
+            inputCantidad.focus();
+            return;
+        }
+
+        inputReferencia.focus();
+    }
+});
+
+// Escanear Referencia: cierra el ciclo -> Procesa, Dibuja y Regresa a Material
+inputReferencia.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         e.preventDefault();
 
         const material = inputMaterial.value.trim().toUpperCase();
         const cantidad = parseInt(inputCantidad.value.trim());
-        
+        const referencia = inputReferencia.value.trim().toUpperCase();
 
         // Validar campos vacíos
-        if (!material || isNaN(cantidad) || cantidad <= 0){
-            alert("Cantidad invalida")
-            inputCantidad.focus;
+        if (!material || isNaN(cantidad) || cantidad <= 0 || !referencia) {
+            alert("Faltan datos: se necesita material, cantidad válida y referencia.");
+            if (!material) {
+                inputMaterial.focus();
+            } else if (isNaN(cantidad) || cantidad <= 0) {
+                inputCantidad.focus();
+            } else {
+                inputReferencia.focus();
+            }
             return;
-
-        } ;
+        }
 
        // Validar límite físico usando el tamaño real del array
         if (datosTrailer.length >= MAX_CAPACIDAD) {
             alert(`¡ALTO! La caja del tráiler está llena (${MAX_CAPACIDAD} tarimas máximo).`);
             inputMaterial.value = '';
             inputCantidad.value = '';
+            inputReferencia.value = '';
             inputMaterial.focus();
             return;
         }
@@ -412,7 +485,11 @@ inputCantidad.addEventListener('keypress', function(e) {
         datosTrailer.push({
             "Posición_Tráiler": datosTrailer.length + 1,
             "Materiales": [
-                { "Número_Material": material, "Cantidad_Piezas": parseInt(cantidad) }
+                {
+                    "Número_Material": material,
+                    "Cantidad_Piezas": cantidad,
+                    "Referencia": referencia
+                }
             ]
         });
 
@@ -423,6 +500,7 @@ inputCantidad.addEventListener('keypress', function(e) {
         // Limpiar para el siguiente ciclo del escáner
         inputMaterial.value = '';
         inputCantidad.value = '';
+        inputReferencia.value = '';
         inputMaterial.focus();
     }
 });
@@ -492,7 +570,9 @@ function generarExcel() {
             const filaExcel = Math.floor(index / 2) + 1; // +1 porque la fila 0 es el Frente
             const columnaExcel = index % 2; // 0 (Izquierda) o 1 (Derecha)
 
-            // Si hay varios materiales en la misma tarima, se listan uno tras otro
+            // Si hay varios materiales en la misma tarima, se listan uno tras otro.
+            // La referencia no se incluye aquí a propósito: el mapa es para ubicar la
+            // tarima de un vistazo, y el detalle completo vive en la hoja Datos_ETL.
             const detalleMateriales = tarima.Materiales
                 .map(m => `${m.Número_Material} | ${m.Cantidad_Piezas} pcs`)
                 .join('  +  ');
@@ -522,12 +602,13 @@ function generarExcel() {
                 filasDatos.push({
                     "Tarima": tarima.Posición_Tráiler,
                     "Número_Material": m.Número_Material,
-                    "Cantidad_Piezas": m.Cantidad_Piezas
+                    "Cantidad_Piezas": m.Cantidad_Piezas,
+                    "Referencia": m.Referencia || ''
                 });
             });
         });
         const hojaDatos = XLSX.utils.json_to_sheet(filasDatos);
-        hojaDatos['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 16 }];
+        hojaDatos['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 22 }];
 
 
         // --- HOJA 3: RESUMEN POR NÚMERO DE PARTE ---
@@ -595,6 +676,7 @@ document.getElementById('btnCancelar').addEventListener('click', function() {
         inputCaja.value = '';
         inputMaterial.value = '';
         inputCantidad.value = '';
+        inputReferencia.value = '';
 
         // Redibujar desde el estado ya vacío: esto limpia de una sola vez el mapa,
         // el contador de tarimas, el total de piezas y la tabla de resumen.
