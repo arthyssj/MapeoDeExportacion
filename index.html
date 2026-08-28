@@ -6,10 +6,25 @@
     <title>Generador de Caja</title>
     <link rel="stylesheet" href="./CSS/style.css">
     <link rel="icon" type="image/png" href="./IMG/icon.png">
+    <script>
+        // Se aplica ANTES de pintar la página para que no haya un parpadeo de tema
+        // al cargar. Si no hay preferencia guardada, se usa la del sistema operativo.
+        (function () {
+            var guardado = null;
+            try { guardado = localStorage.getItem('generadorCajaTema'); } catch (e) {}
+            var prefiereClaro = window.matchMedia
+                && window.matchMedia('(prefers-color-scheme: light)').matches;
+            document.documentElement.setAttribute(
+                'data-theme',
+                guardado || (prefiereClaro ? 'claro' : 'oscuro')
+            );
+        })();
+    </script>
 </head>
 <body>
     <header>
         <h1>Generador de Caja</h1>
+        <button id="btnTema" class="btn-tema" type="button" aria-label="Cambiar tema">☀</button>
     </header>
 
     <main id="app-container">

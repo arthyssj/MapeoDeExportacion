@@ -719,6 +719,38 @@ document.getElementById('btnCancelar').addEventListener('click', function() {
     }
 });
 
+// --- TEMA CLARO / OSCURO ---
+// La preferencia se guarda con su propia llave, aparte del avance de la caja, para que
+// el botón "Cancelar" no la borre. El tema inicial ya lo aplicó el script de index.html.
+const TEMA_KEY = 'generadorCajaTema';
+const btnTema = document.getElementById('btnTema');
+
+function temaActual() {
+    return document.documentElement.getAttribute('data-theme') === 'claro' ? 'claro' : 'oscuro';
+}
+
+function aplicarTema(tema) {
+    document.documentElement.setAttribute('data-theme', tema);
+
+    // El icono muestra hacia dónde se cambia, no el estado actual
+    const esOscuro = tema === 'oscuro';
+    btnTema.innerText = esOscuro ? '☀' : '☾';
+    btnTema.title = esOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+}
+
+btnTema.addEventListener('click', function() {
+    const nuevo = temaActual() === 'oscuro' ? 'claro' : 'oscuro';
+    try {
+        localStorage.setItem(TEMA_KEY, nuevo);
+    } catch (error) {
+        console.error('No se pudo guardar la preferencia de tema:', error);
+    }
+    aplicarTema(nuevo);
+});
+
+// Sincronizar el icono con el tema que ya venía aplicado
+aplicarTema(temaActual());
+
 // --- RECUPERAR PROGRESO GUARDADO AL CARGAR LA PÁGINA ---
 cargarEstado();
 renderizarTrailer();

@@ -5,34 +5,164 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* ============================================================
+   PALETA — TEMA OSCURO (el que se usa por defecto)
+   Los colores viven en variables para poder intercambiarlos
+   completos con el botón de tema, sin duplicar reglas.
+   ============================================================ */
 :root {
-    /* Le avisa al navegador que la página YA es oscura, para que Brave/Chrome no le
+    /* Le avisa al navegador de qué tipo es la página, para que Brave/Chrome no le
        apliquen su "modo oscuro forzado" (que repinta zonas y provoca cortes de color). */
     color-scheme: dark;
 
+    --fondo: #252526;
+    --fondo-header: #1E1E1E;
+    --fondo-panel: #3d3d3d;
+    --fondo-elevado: #333333;
+    --fondo-thead: #2b2b2b;
+    --borde-tabla: #3f3f3f;
+    --hover-fila: #3a3a3a;
+    --sombra-panel: rgba(0, 0, 0, 0.3);
+
+    --texto: #ffffff;
+    --texto-tenue: #b3b3b3;
+    --texto-thead: #b3b3b3;
+    --texto-vacio: #8a8a8a;
+    --titulo: #f39c12;
+    --acento: dodgerblue;
+    --anillo: dodgerblue;
+
+    --input-fondo: #f5f5f5;
+    --input-texto: #333333;
+    --input-borde: #555555;
+
+    --verde-cifra: #2ecc71;
+    --azul-cifra: #4aa3df;
+
+    --btn-primario: #0078d7;
+    --btn-primario-hover: #005a9e;
+    --btn-primario-texto: #ffffff;
+    --btn-peligro: #d13438;
+    --btn-peligro-hover: #a80000;
+    --btn-peligro-texto: #ffffff;
+
+    /* Mapa del tráiler: se mantiene "físico" (piso gris, tarimas claras) en ambos temas */
+    --grid-fondo: #e6e6e6;
+    --grid-borde: #333333;
+    --tarima-fondo: #d9d9d9;
+    --tarima-borde: #999999;
+    --tarima-texto: #000000;
+    --tarima-divisor: #bbbbbb;
+    --tarima-cantidad: #444444;
+    --tarima-ref: #5a5a5a;
+    --cabina-fondo: #c0392b;
+    --puertas-fondo: #555555;
+
     /* El color de fondo también en la raíz: la franja que queda por debajo del
        contenido la pinta el navegador, y así usa este color y no el suyo. */
-    background-color: #252526;
+    background-color: var(--fondo);
+}
+
+/* ============================================================
+   PALETA — TEMA CLARO
+   ============================================================ */
+/* Paleta base de 4 colores:
+     #2779A7  azul   (encabezado, acentos, botón principal)
+     #D14836  rojo   (botón Cancelar / acción destructiva)
+     #9C9C9C  gris   (bordes de campos y separadores marcados)
+     #FFFFFF  blanco (tarjeta de trabajo y campos)
+   El blanco se reserva para las zonas de trabajo; el fondo general lleva un
+   gris azulado para que la pantalla no sea un blanco corrido.
+   Los tonos marcados como "derivado" no vienen de la paleta: hacen falta para
+   el texto y los separadores, que los 4 colores no cubren. */
+:root[data-theme="claro"] {
+    color-scheme: light;
+
+    --fondo: #D3DBE0;            /* derivado: un punto más oscuro que el piso del
+                                    tráiler (#e6e6e6), para que el camión resalte */
+    --fondo-header: #0058b5;
+    --fondo-panel: #FFFFFF;
+    --fondo-elevado: #E3E8EB;    /* derivado */
+    --fondo-thead: #2779A7;
+    --texto-thead: #FFFFFF;
+    --borde-tabla: #C8D0D5;      /* derivado */
+    --hover-fila: #D6DDE2;       /* derivado */
+    --sombra-panel: rgba(25, 35, 42, 0.15);
+
+    --texto: #1F1F1F;            /* derivado: la paleta no trae tono de texto */
+    --texto-tenue: #556066;      /* derivado */
+    --texto-vacio: #78838A;      /* derivado */
+    --titulo: #FFFFFF;           /* sobre el encabezado azul */
+    --acento: #2779A7;
+    --anillo: #2779A7;
+
+    --input-fondo: #FFFFFF;
+    --input-texto: #1F1F1F;
+    --input-borde: #9C9C9C;
+
+    --verde-cifra: #2ecc71;      /* derivado: azul profundo, para diferenciar las dos cifras */
+    --azul-cifra: #2779A7;
+
+    --btn-primario: #2779A7;
+    --btn-primario-hover: #1F6288;   /* derivado */
+    --btn-primario-texto: #FFFFFF;
+    --btn-peligro: #D14836;
+    --btn-peligro-hover: #B0392A;    /* derivado */
+    --btn-peligro-texto: #FFFFFF;
+
+    /* EL TRÁILER CONSERVA LOS COLORES DEL MODO OSCURO en ambos temas:
+       piso gris, tarimas grises, cabina roja y puertas oscuras. Así el mapa se
+       parece a un camión real en vez de seguir la paleta de la interfaz. */
+    --grid-fondo: #e6e6e6;
+    --grid-borde: #333333;
+    --tarima-fondo: #d9d9d9;
+    --tarima-borde: #999999;
+    --tarima-texto: #000000;
+    --tarima-divisor: #bbbbbb;
+    --tarima-cantidad: #444444;
+    --tarima-ref: #5a5a5a;
+    --cabina-fondo: #c0392b;
+    --puertas-fondo: #555555;
 }
 
 body {
-    background-color: #252526;
-    color: #ffffff;
+    background-color: var(--fondo);
+    color: var(--texto);
 
     /* Que el body cubra siempre la ventana completa, aunque haya pocas tarimas */
     min-height: 100vh;
 }
 
 header {
-    background-color: #1E1E1E;
+    position: relative;
+    background-color: var(--fondo-header);
     padding: 15px;
     text-align: center;
-    border-bottom: 2px solid dodgerblue;
+    border-bottom: 2px solid var(--acento);
 }
 
 header h1 {
-    color: #f39c12;
+    color: var(--titulo);
     font-size: 36px;
+}
+
+/* Botón de cambio de tema, en la esquina del encabezado */
+.btn-tema {
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    background-color: var(--fondo-elevado);
+    color: var(--texto);
+    border: 1px solid var(--borde-tabla);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.btn-tema:hover {
+    border-color: var(--acento);
 }
 
 #app-container {
@@ -47,11 +177,11 @@ header h1 {
 
 /* --- Panel de Controles --- */
 #panel-controles {
-    background-color: #3d3d3d;
+    background-color: var(--fondo-panel);
     padding: 25px;
     border-radius: 15px;
     width: 400px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 8px var(--sombra-panel);
 }
 
 .input-group {
@@ -61,7 +191,7 @@ header h1 {
 .input-group label {
     display: block;
     margin-bottom: 8px;
-    color: #b3b3b3;
+    color: var(--texto-tenue);
     font-size: 14px;
 }
 
@@ -69,15 +199,15 @@ header h1 {
     width: 100%;
     padding: 12px;
     border-radius: 6px;
-    border: 2px solid #555;
-    background-color: #f5f5f5;
-    color: #333;
+    border: 2px solid var(--input-borde);
+    background-color: var(--input-fondo);
+    color: var(--input-texto);
     font-size: 16px;
     text-transform: uppercase;
 }
 .input-group input:focus{
     outline: none;
-    border-color: dodgerblue;
+    border-color: var(--anillo);
 }
 
 .acciones {
@@ -96,10 +226,10 @@ button {
     transition: 0.2s;
 }
 
-.btn-primary { background-color: #0078d7; color: white; }
-.btn-primary:hover { background-color: #005a9e; }
-.btn-danger { background-color: #d13438; color: white; }
-.btn-danger:hover { background-color: #a80000; }
+.btn-primary { background-color: var(--btn-primario); color: var(--btn-primario-texto); }
+.btn-primary:hover { background-color: var(--btn-primario-hover); }
+.btn-danger { background-color: var(--btn-peligro); color: var(--btn-peligro-texto); }
+.btn-danger:hover { background-color: var(--btn-peligro-hover); }
 
 .resumen {
     margin-top: 35px;
@@ -114,7 +244,7 @@ button {
     flex: 1;
     min-width: 0;
     text-align: center;
-    background-color: #333;
+    background-color: var(--fondo-elevado);
     border-radius: 10px;
     padding: 12px 8px;
 }
@@ -122,7 +252,7 @@ button {
 .cifra h2 {
     font-size: 13px;
     font-weight: 600;
-    color: #b3b3b3;
+    color: var(--texto-tenue);
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 4px;
@@ -136,8 +266,8 @@ button {
     line-height: 1.1;
 }
 
-.numero-verde { color: #2ecc71; }
-.numero-azul { color: #4aa3df; }
+.numero-verde { color: var(--verde-cifra); }
+.numero-azul { color: var(--azul-cifra); }
 
 /* --- Resumen agrupado por número de parte --- */
 .resumen-materiales {
@@ -147,7 +277,7 @@ button {
 .resumen-materiales h3 {
     font-size: 13px;
     font-weight: 600;
-    color: #b3b3b3;
+    color: var(--texto-tenue);
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 8px;
@@ -159,7 +289,7 @@ button {
     max-height: clamp(300px, 60vh, 900px);
     overflow-y: auto;
     border-radius: 8px;
-    background-color: #333;
+    background-color: var(--fondo-elevado);
 }
 
 #tabla-resumen {
@@ -171,8 +301,8 @@ button {
 #tabla-resumen thead th {
     position: sticky;
     top: 0;
-    background-color: #2b2b2b;
-    color: #b3b3b3;
+    background-color: var(--fondo-thead);
+    color: var(--texto-thead);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -187,12 +317,12 @@ button {
 
 #tabla-resumen td {
     padding: 7px 10px;
-    border-top: 1px solid #3f3f3f;
-    color: #ffffff;
+    border-top: 1px solid var(--borde-tabla);
+    color: var(--texto);
 }
 
 #tabla-resumen tbody tr:hover td {
-    background-color: #3a3a3a;
+    background-color: var(--hover-fila);
 }
 
 .col-material {
@@ -208,7 +338,7 @@ button {
 
 .resumen-vacio {
     text-align: center;
-    color: #8a8a8a;
+    color: var(--texto-vacio);
     font-style: italic;
     padding: 14px 10px;
 }
@@ -221,7 +351,7 @@ button {
 }
 
 .cabina-trailer, .puertas-trailer {
-    background-color: #c0392b;
+    background-color: var(--cabina-fondo);
     color: white;
     width: 320px;
     text-align: center;
@@ -233,7 +363,7 @@ button {
 }
 
 .cabina-trailer { border-radius: 20px 20px 0 0; }
-.puertas-trailer { border-radius: 0 0 5px 5px; background-color: #555; }
+.puertas-trailer { border-radius: 0 0 5px 5px; background-color: var(--puertas-fondo); }
 
 /* La magia del Grid */
 .trailer-grid {
@@ -241,17 +371,17 @@ button {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: repeat(14, minmax(60px, auto));
     gap: 4px;
-    background-color: #e6e6e6;
+    background-color: var(--grid-fondo);
     padding: 8px;
     width: 320px;
-    border-left: 4px solid #333;
-    border-right: 4px solid #333;
+    border-left: 4px solid var(--grid-borde);
+    border-right: 4px solid var(--grid-borde);
 }
 
 .tarima {
-    background-color: #d9d9d9;
-    border: 1px solid #999;
-    color: #000;
+    background-color: var(--tarima-fondo);
+    border: 1px solid var(--tarima-borde);
+    color: var(--tarima-texto);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -283,7 +413,7 @@ button {
 .linea-material {
     width: 100%;
     min-width: 0;
-    border-top: 1px dashed #bbb;
+    border-top: 1px dashed var(--tarima-divisor);
     padding-top: 2px;
 }
 
@@ -298,7 +428,7 @@ button {
 
 .linea-ref {
     font-size: 10px;
-    color: #5a5a5a;
+    color: var(--tarima-ref);
     overflow-wrap: anywhere;
     line-height: 1.2;
 }
@@ -318,7 +448,7 @@ button {
 .linea-material span {
     font-size: 11px;
     white-space: nowrap;
-    color: #444;
+    color: var(--tarima-cantidad);
     flex: 0 0 auto;
 }
 .btn-eliminar-tarima{
@@ -395,11 +525,14 @@ button {
 }
 
 /* --- Modo edición inline de una tarima --- */
+/* El formulario conserva el mismo amarillo en ambos temas: la tarima es clara
+   en los dos, así que se lee igual y sigue destacando como "en edición". */
 .tarima-editando {
     background-color: #fff6dd;
     border: 1px solid #f39c12;
     box-shadow: inset 0 0 5px rgba(243, 156, 18, 0.3);
     padding: 6px 4px 4px;
+    color: #000;
 }
 
 /* Materiales que la tarima ya tiene, mostrados sólo como contexto al agregar uno nuevo */
@@ -487,6 +620,8 @@ button {
     text-transform: uppercase;
     border: 1px solid #999;
     border-radius: 3px;
+    background-color: #ffffff;
+    color: #1f1f21;
 }
 
 .tarima-editando input:focus {
