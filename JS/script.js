@@ -513,18 +513,21 @@ function generarExcel() {
 
         // --- HOJA 2: DATOS TABULARES ---
         // Una fila por material: si una tarima tiene 2+ materiales, se generan 2+ filas
-        // con la misma Posición_Tráiler, para que el ETL no pierda ninguno.
+        // con la misma tarima, para que el ETL no pierda ninguno.
+        // El número va como valor numérico (no como texto "Tarima 1") para que en Excel
+        // se pueda ordenar y filtrar correctamente; la etiqueta va en el encabezado.
         const filasDatos = [];
         datosTrailer.forEach(tarima => {
             tarima.Materiales.forEach(m => {
                 filasDatos.push({
-                    "Posición_Tráiler": tarima.Posición_Tráiler,
+                    "Tarima": tarima.Posición_Tráiler,
                     "Número_Material": m.Número_Material,
                     "Cantidad_Piezas": m.Cantidad_Piezas
                 });
             });
         });
         const hojaDatos = XLSX.utils.json_to_sheet(filasDatos);
+        hojaDatos['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 16 }];
 
 
         // --- HOJA 3: RESUMEN POR NÚMERO DE PARTE ---
