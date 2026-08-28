@@ -1,5 +1,7 @@
 # Generador de Caja
 
+![image Main](Screenshot.png)
+
 Herramienta web para mapear la carga de un tráiler de exportación a **DSV**.
 
 Permite registrar con lector de código de barras qué material va en cada tarima y en qué
