@@ -574,13 +574,14 @@ function asegurarXLSX() {
 
 // --- LÓGICA DE EXPORTACIÓN Excel ---
 function generarExcel() {
-    // 1. Generar nombre de archivo dinámico
-    const numCaja = inputCaja.value.trim().toUpperCase() || 'SINNUM';
+    // 1. Generar nombre de archivo dinámico: sólo lo capturado en el primer campo
+    //    más la fecha, sin ningún texto fijo antepuesto.
+    const titulo = inputCaja.value.trim().toUpperCase() || 'SIN-TITULO';
     const hoy = new Date();
     const anio = hoy.getFullYear();
     const mes = String(hoy.getMonth() + 1).padStart(2, '0');
     const dia = String(hoy.getDate()).padStart(2, '0');
-    const nombreSugerido = `Caja-${numCaja}-${anio}-${mes}-${dia}.xlsx`;
+    const nombreSugerido = `${titulo}-${anio}-${mes}-${dia}.xlsx`;
 
     try {
         // --- HOJA 1: MAPA VISUAL ---
