@@ -93,10 +93,16 @@
         </section>
     </main>
 
-    <!-- SheetJS (generador de Excel). Se intenta desde el CDN con "async" para que la falta
-         de internet no retrase la carga de la app. Si no llega a cargar, script.js recurre
-         automáticamente a la copia local en ./JS/xlsx.full.min.js -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js" async></script>
+    <!-- SheetJS (generador de Excel), servido SIEMPRE desde la copia del repo.
+         Antes se bajaba del CDN con la copia local sólo como respaldo, pero el CDN no
+         aportaba nada: la copia ya viaja en el repo (misma versión, 0.20.0) y la app
+         tiene que funcionar sin internet en el almacén. A cambio, un <script> externo
+         sin comprobación de integridad podía ejecutar código arbitrario con acceso a
+         todo lo escaneado si ese CDN se comprometía. Un archivo propio no tiene ese
+         problema y además arranca sin depender de la red.
+         "defer" para no bloquear el dibujado: son casi 1 MB y no hacen falta hasta
+         que alguien pulse Exportar. -->
+    <script src="./JS/xlsx.full.min.js" defer></script>
     <script src="./JS/script.js"></script>
 </body>
 </html>

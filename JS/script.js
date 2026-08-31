@@ -895,16 +895,18 @@ inputReferencia.addEventListener('keypress', function(e) {
 // Guardar el número de caja a medida que se escribe/escanea
 inputCaja.addEventListener('input', guardarEstado);
 
-// --- CARGA DEL GENERADOR DE EXCEL (SheetJS) CON RESPALDO LOCAL ---
-// index.html intenta bajar SheetJS del CDN. Si no hay internet o el firewall lo bloquea,
-// aquí se carga la copia local del repo para que exportar siga funcionando sin conexión.
+// --- CARGA DEL GENERADOR DE EXCEL (SheetJS) ---
+// index.html ya carga ./JS/xlsx.full.min.js con "defer", así que al pulsar Exportar la
+// librería normalmente está lista. Esta función es la red por si no lo está: la etiqueta
+// pudo fallar porque el archivo se movió o se perdió al copiar la carpeta. Reintenta una
+// sola vez y, si tampoco, devuelve un error que dice exactamente qué falta.
 let cargaXlsxEnCurso = null;
 
 function asegurarXLSX() {
-    // El CDN ya cargó: no hay nada que hacer
+    // Ya está cargada: no hay nada que hacer
     if (typeof XLSX !== 'undefined') return Promise.resolve();
 
-    // Ya se está cargando la copia local: reutilizamos la misma promesa
+    // Ya se está reintentando: reutilizamos la misma promesa
     if (cargaXlsxEnCurso) return cargaXlsxEnCurso;
 
     cargaXlsxEnCurso = new Promise(function(resolve, reject) {
