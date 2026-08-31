@@ -103,7 +103,7 @@ Agrupado por número de parte, listo para cotejar contra el packing list:
 | Número_Material | Tarimas | Total_Piezas |
 |---|---|---|
 | P-1 | 3 | 1450 |
-| PACCAR | 1 | 25 |
+| P-2 | 1 | 25 |
 | **TOTAL GENERAL** | **4** | **1475** |
 
 ### `Datos_ETL`
@@ -135,7 +135,7 @@ Publicado con GitHub Pages desde este mismo repositorio.
 Descarga el repositorio y abre `index.html` con doble clic:
 
 ```bash
-git clone https://github.com/arthyssj/generadorCaja.git
+git clone https://github.com/arthyssj/MapeoDeExportacion.git
 ```
 
 O desde GitHub: **Code → Download ZIP**, descomprimir y abrir `index.html`.
