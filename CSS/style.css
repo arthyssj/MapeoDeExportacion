@@ -761,6 +761,37 @@ button {
    Los colores salen de las variables ya existentes: aquí no se agrega paleta.
    ============================================================ */
 
+/* --- Entrada de la página --- */
+/* Corre UNA vez al abrir y nunca más, que es lo que la separa de un adorno en bucle:
+   mientras se trabaja, la pantalla vuelve a estar quieta. No retrasa nada porque anima
+   opacidad y desplazamiento, no la disponibilidad: el campo de título ya tiene el foco
+   y acepta un escaneo desde el primer frame.
+   El escalonado es corto a propósito; con más, abrir la app se sentiría lento cuando se
+   hace veinte veces al día. */
+@keyframes bloque-entra {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes header-entra {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+header {
+    animation: header-entra 260ms ease-out both;
+}
+
+/* 'both' deja el estado inicial aplicado durante la espera; si no, el panel parpadearía
+   visible antes de empezar a entrar. */
+#panel-controles {
+    animation: bloque-entra 260ms ease-out 60ms both;
+}
+
+#panel-trailer {
+    animation: bloque-entra 260ms ease-out 120ms both;
+}
+
 @keyframes tarima-entra {
     from { opacity: 0; transform: scale(0.88); }
     to   { opacity: 1; transform: scale(1); }
