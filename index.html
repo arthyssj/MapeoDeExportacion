@@ -88,7 +88,24 @@
         <section id="panel-trailer">
             <div class="cabina-trailer">Frente del Tráiler</div>
             <div id="mapa-trailer" class="trailer-grid">
+                <!-- Estado vacío. Va dentro del grid pero fuera de su flujo (absolute),
+                     así no ocupa una celda ni desordena la colocación de las tarimas.
+                     Sólo se ve mientras no hay nada escaneado, así que no compite con
+                     el trabajo: desaparece en cuanto entra la primera tarima. -->
+                <div class="trailer-vacio">
+                    <svg class="tarima-fantasma" viewBox="0 0 64 44" width="76" height="52"
+                         role="presentation" focusable="false" aria-hidden="true">
+                        <rect x="2"  y="3"  width="60" height="7" rx="1.5"/>
+                        <rect x="2"  y="14" width="60" height="7" rx="1.5"/>
+                        <rect x="4"  y="25" width="10" height="9" rx="1.5"/>
+                        <rect x="27" y="25" width="10" height="9" rx="1.5"/>
+                        <rect x="50" y="25" width="10" height="9" rx="1.5"/>
+                        <rect x="2"  y="36" width="60" height="6" rx="1.5"/>
+                    </svg>
+                    <p class="trailer-vacio-titulo">Tráiler vacío</p>
+                    <p class="trailer-vacio-pista">Escanea un material para colocar la primera tarima</p>
                 </div>
+            </div>
             <div class="puertas-trailer">Puertas</div>
         </section>
     </main>

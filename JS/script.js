@@ -623,6 +623,9 @@ function renderizarTrailer(opciones) {
     totalTarimas = datosTrailer.length;
     animarContador(contadorTarimas, totalTarimas);
 
+    // El estado vacío del mapa lo enciende y apaga el CSS con esta clase
+    mapaTrailer.classList.toggle('trailer-sin-tarimas', totalTarimas === 0);
+
     // Actualizar totales y el agrupado por número de parte
     renderizarResumen();
 

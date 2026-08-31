@@ -384,6 +384,66 @@ button {
     border-right: 4px solid var(--grid-borde);
 }
 
+/* --- Estado vacío del mapa --- */
+/* Cubre el grid sin ser un elemento del grid: 'absolute' lo saca del flujo, así que las
+   tarimas se colocan igual que si no existiera. pointer-events:none para que no
+   intercepte nada. Se desvanece al entrar la primera tarima, en el mismo tiempo que la
+   animación de entrada, para que se lea como un relevo y no como dos cosas sueltas. */
+.trailer-vacio {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 220ms ease-out, visibility 220ms;
+}
+
+.trailer-sin-tarimas .trailer-vacio {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Los tonos salen del grupo "físico" de la paleta, el que se mantiene igual en los dos
+   temas, porque el piso del tráiler también es gris claro en ambos. */
+.tarima-fantasma {
+    fill: var(--tarima-borde);
+}
+
+.trailer-vacio-titulo {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--tarima-cantidad);
+}
+
+.trailer-vacio-pista {
+    font-size: 12px;
+    line-height: 1.4;
+    max-width: 22ch;
+    color: var(--tarima-ref);
+}
+
+/* Flotación lenta y de pocos píxeles. Se sale del tope de 300 ms a propósito y es la
+   única animación en bucle de la app: sólo existe cuando NO hay trabajo en pantalla,
+   así que no compite con las señales de que algo pasó. El @media de movimiento
+   reducido la detiene junto con el resto. */
+@keyframes tarima-fantasma-flota {
+    from { transform: translateY(-3px); }
+    to   { transform: translateY(3px); }
+}
+
+.trailer-sin-tarimas .tarima-fantasma {
+    animation: tarima-fantasma-flota 2600ms ease-in-out infinite alternate;
+}
+
 .tarima {
     background-color: var(--tarima-fondo);
     border: 1px solid var(--tarima-borde);
