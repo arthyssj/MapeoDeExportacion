@@ -371,8 +371,11 @@ button {
     /* Ancla para la tarima que se está borrando: JS la saca del flujo con
        position:absolute y necesita medir desde el contenedor, no desde la página. */
     position: relative;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: repeat(14, minmax(60px, auto));
+    /* Las medidas de la caja las fija script.js (FILAS_TRAILER / COLUMNAS_TRAILER) y las
+       inyecta como variables, para no tener el mismo número escrito en dos archivos.
+       Los valores tras la coma son el respaldo si el JS no llegó a correr. */
+    grid-template-columns: repeat(var(--columnas-trailer, 2), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--filas-trailer, 14), minmax(60px, auto));
     gap: 4px;
     background-color: var(--grid-fondo);
     padding: 8px;

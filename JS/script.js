@@ -1,5 +1,13 @@
 // --- ESTADO DE LA APLICACIÓN GENERADOR BASE---
-const MAX_CAPACIDAD = 28;
+// Medidas de la caja: 14 posiciones de fondo por 2 de ancho. Es UN solo hecho físico,
+// pero estaba escrito suelto en siete sitios (el tope del escaneo, el grid del CSS, el
+// alto de la matriz del Excel, sus cuentas de fila/columna, las tres filas literales de
+// dos celdas y el ancho de columnas). Cambiar el tamaño de la caja obligaba a dar con
+// todos, y olvidar uno no produce ningún error: el mapa sale mal en silencio.
+// La capacidad se deriva porque es consecuencia de las otras dos, no un dato aparte.
+const FILAS_TRAILER = 14;
+const COLUMNAS_TRAILER = 2;
+const MAX_CAPACIDAD = FILAS_TRAILER * COLUMNAS_TRAILER;
 const STORAGE_KEY = 'generadorCajaEstado';
 let totalTarimas = 0;
 let datosTrailer = []; // Array en memoria para exportar a Excel
@@ -26,6 +34,13 @@ const contadorTarimas = document.getElementById('contadorTarimas');
 const contadorPiezas = document.getElementById('contadorPiezas');
 const cuerpoResumen = document.getElementById('cuerpo-resumen');
 const contenedorAvisos = document.getElementById('avisos');
+
+// El grid del mapa se dibuja con las medidas de arriba. Se las pasamos al CSS en vez de
+// repetir los números allá, para que el layout siga al dato y no al revés. style.css
+// declara los mismos valores como respaldo del var(), así que la caja se ve bien aunque
+// esta línea no llegue a correr.
+document.documentElement.style.setProperty('--filas-trailer', String(FILAS_TRAILER));
+document.documentElement.style.setProperty('--columnas-trailer', String(COLUMNAS_TRAILER));
 
 // Escapa el texto que se inserta con innerHTML. Un número de parte con comillas
 // o "<" rompería el HTML del formulario de edición y corrompería lo mostrado.
@@ -943,22 +958,28 @@ function generarExcel() {
         // --- HOJA 1: MAPA VISUAL ---
         // Construimos una matriz de filas y columnas
         const matrizMapa = [];
-        
-        // Cabecera visual
-        matrizMapa.push(["=== FRENTE DEL TRÁILER ===", "=== FRENTE DEL TRÁILER ==="]);
 
-        // Crear la estructura vacía de 14 filas x 2 columnas
-        for (let i = 0; i < 14; i++) {
-            matrizMapa.push([`(Vacío)`, `(Vacío)`]);
+        // Los rótulos ocupan la caja entera a lo ancho. Devuelve una fila nueva cada vez
+        // para que las filas de la matriz no compartan el mismo arreglo.
+        const filaCompleta = function(texto) {
+            return Array(COLUMNAS_TRAILER).fill(texto);
+        };
+
+        // Cabecera visual
+        matrizMapa.push(filaCompleta("=== FRENTE DEL TRÁILER ==="));
+
+        // Crear la estructura vacía: una fila por posición de fondo
+        for (let i = 0; i < FILAS_TRAILER; i++) {
+            matrizMapa.push(filaCompleta("(Vacío)"));
         }
 
         // Llenar las coordenadas exactas con los datos escaneados
         datosTrailer.forEach(tarima => {
-            const index = tarima.Posición_Tráiler - 1; // Índice de 0 a 27
+            const index = tarima.Posición_Tráiler - 1; // Índice de 0 a MAX_CAPACIDAD - 1
 
             // Cálculos matemáticos simples para saber la celda exacta
-            const filaExcel = Math.floor(index / 2) + 1; // +1 porque la fila 0 es el Frente
-            const columnaExcel = index % 2; // 0 (Izquierda) o 1 (Derecha)
+            const filaExcel = Math.floor(index / COLUMNAS_TRAILER) + 1; // +1 porque la fila 0 es el Frente
+            const columnaExcel = index % COLUMNAS_TRAILER; // 0 (Izquierda) o 1 (Derecha)
 
             // Si hay varios materiales en la misma tarima, se listan uno tras otro.
             // La referencia no se incluye aquí a propósito: el mapa es para ubicar la
@@ -972,13 +993,17 @@ function generarExcel() {
         });
 
         // Puertas
-        matrizMapa.push(["=== PUERTAS ===", "=== PUERTAS ==="]);
+        matrizMapa.push(filaCompleta("=== PUERTAS ==="));
 
         // Convertir la matriz a hoja de Excel
         const hojaMapa = XLSX.utils.aoa_to_sheet(matrizMapa);
 
-        // Ajustar el ancho de las 2 columnas para que el texto no se corte
-        hojaMapa['!cols'] = [{ wch: 35 }, { wch: 35 }];
+        // Ajustar el ancho de las columnas para que el texto no se corte. Un objeto
+        // distinto por columna: SheetJS los trata como suyos y compartir uno solo
+        // dejaría que un ajuste interno afectara a todas.
+        hojaMapa['!cols'] = Array.from({ length: COLUMNAS_TRAILER }, function() {
+            return { wch: 35 };
+        });
 
 
         // --- HOJA 2: DATOS TABULARES ---
