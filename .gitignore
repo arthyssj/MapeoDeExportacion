@@ -1,0 +1,7 @@
+# Notas de arquitectura para Claude Code. Describen convenciones de trabajo
+# personales (cómo commitear, quién hace el push), así que se quedan en local.
+CLAUDE.md
+
+# Exportaciones generadas por la propia app, si el navegador las descarga
+# dentro de la carpeta del proyecto.
+*.xlsx
