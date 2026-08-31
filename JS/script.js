@@ -165,281 +165,389 @@ function leerFilasEdicionDesdeDOM(contenedor) {
     });
 }
 
-// --- NUEVA FUNCIÓN: ENCARGADA DE DIBUJAR TODO EL TRÁILER ---
-function renderizarTrailer() {
-    // 1. Limpiar por completo el contenedor visual para volverlo a armar
-    mapaTrailer.innerHTML = '';
+// --- DIBUJO DEL TRÁILER (RENDER INCREMENTAL) ---
+// Antes se hacía mapaTrailer.innerHTML = '' y se reconstruían todas las tarimas en cada
+// cambio. Ahora se conserva el nodo de cada posición y sólo se rehace el que cambió: al
+// escanear la tarima 12, las once anteriores ni se tocan (y no pierden su estado en
+// pantalla ni una animación a medio correr).
+// Clave = Posición_Tráiler (1..N); valor = { nodo, firma }.
+const nodosTarima = new Map();
 
-    // 2. Corregir las posiciones (por si borramos una intermedia, se reajustan de 1 a N)
+// Resume en un texto todo lo que se dibuja de una tarima. Si la firma no cambió, el nodo
+// que ya está en pantalla sigue siendo válido y no se vuelve a construir.
+// Se serializan arreglos (y no los objetos tal cual) por dos razones: el orden de las
+// llaves difiere entre los datos migrados de versiones viejas y los recién capturados,
+// y así cada campo queda delimitado, sin que un número de parte pueda "juntarse" con la
+// cantidad y producir dos firmas iguales para tarimas distintas.
+function firmaTarima(tarima) {
+    return JSON.stringify(tarima.Materiales.map(function(m) {
+        return [m.Número_Material, m.Cantidad_Piezas, m.Referencia || ''];
+    }));
+}
+
+// --- CONSTRUCCIÓN DE UNA TARIMA ---
+
+// Tarima normal: los materiales y los tres botones de la esquina
+function construirVistaTarima(tarima) {
+    const nodo = document.createElement('div');
+    nodo.className = 'tarima';
+
+    const lineasHtml = tarima.Materiales.map(function(m) {
+        // La referencia sólo se dibuja si existe (los datos migrados no la traen)
+        const refHtml = m.Referencia
+            ? `<div class="linea-ref">Ref: ${escaparHtml(m.Referencia)}</div>`
+            : '';
+
+        return `
+            <div class="linea-material">
+                <div class="linea-encabezado">
+                    <strong>${escaparHtml(m.Número_Material)}</strong>
+                    <span>${m.Cantidad_Piezas} pcs</span>
+                </div>
+                ${refHtml}
+            </div>
+        `;
+    }).join('');
+
+    nodo.innerHTML = `
+        <button class="btn-editar-tarima" title="Editar esta tarima">✎</button>
+        <button class="btn-agregar-material" title="Agregar otro material a esta tarima">+</button>
+        <button class="btn-eliminar-tarima" title="Eliminar esta tarima">×</button>
+        <div class="lineas-material">${lineasHtml}</div>
+    `;
+
+    return nodo;
+}
+
+// Tarima abierta en formulario: editar sus materiales o agregar uno nuevo
+function construirFormularioTarima(tarima) {
+    const nodo = document.createElement('div');
+    nodo.className = 'tarima';
+    nodo.classList.add('tarima-editando');
+
+    const esAlta = modoEdicion === 'agregar';
+
+    // Al agregar, los materiales que ya tiene la tarima se muestran sólo de
+    // referencia (no editables), para no repetir el formulario de edición.
+    const existentesHtml = esAlta
+        ? `<div class="lineas-existentes">` + tarima.Materiales.map(function(m) {
+                return `
+                    <div class="linea-existente">
+                        <strong>${escaparHtml(m.Número_Material)}</strong>
+                        <span>${m.Cantidad_Piezas} pcs</span>
+                    </div>
+                `;
+            }).join('') + `</div>
+            <div class="rotulo-alta">Nuevo material</div>`
+        : '';
+
+    const filasHtml = lineasEdicionTemp.map(function(linea) {
+        return `
+            <div class="fila-material-edit">
+                <div class="fila-edit-top">
+                    <input type="text" class="edit-material" value="${escaparHtml(linea.Número_Material)}" title="Material">
+                    <input type="number" class="edit-cantidad" value="${escaparHtml(linea.Cantidad_Piezas)}" title="Cantidad">
+                    <button class="btn-quitar-linea" title="Quitar este material">×</button>
+                </div>
+                <input type="text" class="edit-referencia" value="${escaparHtml(linea.Referencia || '')}" placeholder="Referencia" title="Referencia">
+            </div>
+        `;
+    }).join('');
+
+    nodo.innerHTML = `
+        ${existentesHtml}
+        <div class="lineas-edicion">${filasHtml}</div>
+        <button class="btn-agregar-linea" type="button">+ Otro material</button>
+        <div class="edit-acciones">
+            <button class="btn-guardar-edicion" title="${esAlta ? 'Agregar a la tarima' : 'Guardar cambios'}">✓</button>
+            <button class="btn-cancelar-edicion" title="Cancelar">×</button>
+        </div>
+    `;
+
+    return nodo;
+}
+
+// Deja listo para escanear el primer material vacío del formulario (el recién agregado);
+// si no hay ninguno, la primera fila.
+function enfocarPrimeraFilaVacia(nodo) {
+    const filas = nodo.querySelectorAll('.fila-material-edit');
+    const indiceVacio = lineasEdicionTemp.findIndex(function(l) { return !l.Número_Material; });
+    const inputAEnfocar = filas[indiceVacio >= 0 ? indiceVacio : 0].querySelector('.edit-material');
+    inputAEnfocar.focus();
+    inputAEnfocar.select();
+}
+
+// --- RENDER: SÓLO SE REHACE LO QUE CAMBIÓ ---
+function renderizarTrailer() {
+    // 1. Corregir las posiciones (por si borramos una intermedia, se reajustan de 1 a N)
     renumerarPosiciones();
 
-    // 3. Sincronizar el contador global con el tamaño real del arreglo
+    // 2. Sincronizar el contador global con el tamaño real del arreglo
     totalTarimas = datosTrailer.length;
     contadorTarimas.innerText = totalTarimas;
 
     // Actualizar totales y el agrupado por número de parte
     renderizarResumen();
 
-    // 4. Recorrer el arreglo de datos y fabricar los cuadritos en el Grid
-    datosTrailer.forEach((tarima, index) => {
-        // Crear el elemento visual
-        const nuevaTarima = document.createElement('div');
-        nuevaTarima.className = 'tarima';
+    // 3. Sacar del mapa (y del DOM) las posiciones que ya no existen
+    nodosTarima.forEach(function(entrada, posicion) {
+        if (posicion > datosTrailer.length) {
+            entrada.nodo.remove();
+            nodosTarima.delete(posicion);
+        }
+    });
 
-        if (index === editandoIndex) {
-            // --- FORMULARIO: editar los materiales o agregar uno nuevo ---
-            const esAlta = modoEdicion === 'agregar';
-            nuevaTarima.classList.add('tarima-editando');
+    let nodoEnEdicion = null;
 
-            // Al agregar, los materiales que ya tiene la tarima se muestran sólo de
-            // referencia (no editables), para no repetir el formulario de edición.
-            const existentesHtml = esAlta
-                ? `<div class="lineas-existentes">` + tarima.Materiales.map(function(m) {
-                        return `
-                            <div class="linea-existente">
-                                <strong>${escaparHtml(m.Número_Material)}</strong>
-                                <span>${m.Cantidad_Piezas} pcs</span>
-                            </div>
-                        `;
-                    }).join('') + `</div>
-                    <div class="rotulo-alta">Nuevo material</div>`
-                : '';
+    // 4. Recorrer los datos y fabricar sólo los cuadritos que cambiaron
+    datosTrailer.forEach(function(tarima, index) {
+        const posicion = index + 1;
+        const esEdicion = index === editandoIndex;
 
-            const filasHtml = lineasEdicionTemp.map(function(linea) {
-                return `
-                    <div class="fila-material-edit">
-                        <div class="fila-edit-top">
-                            <input type="text" class="edit-material" value="${escaparHtml(linea.Número_Material)}" title="Material">
-                            <input type="number" class="edit-cantidad" value="${escaparHtml(linea.Cantidad_Piezas)}" title="Cantidad">
-                            <button class="btn-quitar-linea" title="Quitar este material">×</button>
-                        </div>
-                        <input type="text" class="edit-referencia" value="${escaparHtml(linea.Referencia || '')}" placeholder="Referencia" title="Referencia">
-                    </div>
-                `;
-            }).join('');
+        // El formulario siempre se rehace: lo que muestra vive en lineasEdicionTemp y no
+        // en la tarima, así que la firma de los datos no alcanza para representarlo.
+        // Guardar null también obliga a rehacerlo al cerrarlo, aunque los materiales
+        // hayan quedado idénticos (cancelar una edición sin cambios).
+        const firma = esEdicion ? null : firmaTarima(tarima);
+        const previo = nodosTarima.get(posicion);
 
-            nuevaTarima.innerHTML = `
-                ${existentesHtml}
-                <div class="lineas-edicion">${filasHtml}</div>
-                <button class="btn-agregar-linea" type="button">+ Otro material</button>
-                <div class="edit-acciones">
-                    <button class="btn-guardar-edicion" title="${esAlta ? 'Agregar a la tarima' : 'Guardar cambios'}">✓</button>
-                    <button class="btn-cancelar-edicion" title="Cancelar">×</button>
-                </div>
-            `;
+        // Nodo intacto: se conserva tal cual, con lo que tenga en curso
+        if (previo && firma !== null && previo.firma === firma) return;
 
-            const guardarEdicion = function() {
-                const filas = leerFilasEdicionDesdeDOM(nuevaTarima);
-                const materialesValidados = [];
+        const nodo = esEdicion
+            ? construirFormularioTarima(tarima)
+            : construirVistaTarima(tarima);
 
-                for (const fila of filas) {
-                    const matRaw = fila.Número_Material.trim();
-                    const cantRaw = String(fila.Cantidad_Piezas).trim();
-                    const refRaw = String(fila.Referencia || '').trim();
+        // De aquí salen el índice y los datos al hacer clic (ver delegación)
+        nodo.dataset.posicion = posicion;
 
-                    // fila vacía sin usar, se ignora
-                    if (!matRaw && !cantRaw && !refRaw) continue;
-
-                    const mat = matRaw.toUpperCase();
-                    const cant = parseInt(cantRaw);
-                    const ref = refRaw.toUpperCase();
-
-                    if (!mat || isNaN(cant) || cant <= 0 || !ref) {
-                        alert('Revisa los materiales: cada línea necesita número de material, una cantidad válida (mayor a 0) y referencia.');
-                        return;
-                    }
-                    materialesValidados.push({
-                        Número_Material: mat,
-                        Cantidad_Piezas: cant,
-                        Referencia: ref
-                    });
-                }
-
-                if (materialesValidados.length === 0) {
-                    alert(esAlta
-                        ? 'Captura el material que quieres agregar, o cierra con la "×".'
-                        : 'La tarima debe tener al menos un material válido.');
-                    return;
-                }
-
-                // Al agregar sumamos a lo que ya traía; al editar reemplazamos todo
-                tarima.Materiales = esAlta
-                    ? tarima.Materiales.concat(materialesValidados)
-                    : materialesValidados;
-
-                cerrarFormulario();
-                guardarEstado();
-                renderizarTrailer();
-            };
-
-            nuevaTarima.querySelector('.btn-guardar-edicion').addEventListener('click', guardarEdicion);
-            nuevaTarima.querySelector('.btn-cancelar-edicion').addEventListener('click', function() {
-                cerrarFormulario();
-                renderizarTrailer();
-            });
-
-            nuevaTarima.querySelector('.btn-agregar-linea').addEventListener('click', function() {
-                lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
-                lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '', Referencia: '' });
-                renderizarTrailer();
-            });
-
-            nuevaTarima.querySelectorAll('.btn-quitar-linea').forEach(function(btn, i) {
-                btn.addEventListener('click', function() {
-                    lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
-
-                    if (lineasEdicionTemp.length <= 1) {
-                        if (esAlta) {
-                            // Quitar la única línea nueva equivale a cancelar el alta
-                            cerrarFormulario();
-                            renderizarTrailer();
-                            return;
-                        }
-                        alert('Una tarima debe tener al menos un material. Para quitarla por completo usa la "×" de la tarima.');
-                        return;
-                    }
-
-                    lineasEdicionTemp.splice(i, 1);
-                    renderizarTrailer();
-                });
-            });
-
-            const filasInputs = nuevaTarima.querySelectorAll('.fila-material-edit');
-            filasInputs.forEach(function(fila, i) {
-                const campoMaterial = fila.querySelector('.edit-material');
-                const campoCantidad = fila.querySelector('.edit-cantidad');
-                const campoReferencia = fila.querySelector('.edit-referencia');
-
-                // Misma cadena que el panel de captura: material -> cantidad -> referencia
-                campoMaterial.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        campoCantidad.focus();
-                    }
-                });
-
-                campoCantidad.addEventListener('keypress', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        campoReferencia.focus();
-                    }
-                });
-
-                campoReferencia.addEventListener('keypress', function(e) {
-                    if (e.key !== 'Enter') return;
-                    e.preventDefault();
-
-                    const esUltima = i === filasInputs.length - 1;
-                    if (esUltima) {
-                        // Enter en la última línea: agrega otra fila lista para escanear
-                        lineasEdicionTemp = leerFilasEdicionDesdeDOM(nuevaTarima);
-                        lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '', Referencia: '' });
-                        renderizarTrailer();
-                    } else {
-                        filasInputs[i + 1].querySelector('.edit-material').focus();
-                    }
-                });
-            });
-
-            mapaTrailer.appendChild(nuevaTarima);
-
-            // Enfocar la primera fila vacía si existe (recién agregada); si no, la primera fila
-            const indiceVacio = lineasEdicionTemp.findIndex(function(l) { return !l.Número_Material; });
-            const inputAEnfocar = filasInputs[indiceVacio >= 0 ? indiceVacio : 0].querySelector('.edit-material');
-            inputAEnfocar.focus();
-            inputAEnfocar.select();
-            return;
+        if (previo) {
+            previo.nodo.replaceWith(nodo);
+        } else {
+            // Las posiciones se recorren en orden y las que faltan son siempre las
+            // últimas, así que agregar al final respeta el orden del grid.
+            mapaTrailer.appendChild(nodo);
         }
 
-        const lineasHtml = tarima.Materiales.map(function(m) {
-            // La referencia sólo se dibuja si existe (los datos migrados no la traen)
-            const refHtml = m.Referencia
-                ? `<div class="linea-ref">Ref: ${escaparHtml(m.Referencia)}</div>`
-                : '';
+        nodosTarima.set(posicion, { nodo: nodo, firma: firma });
 
-            return `
-                <div class="linea-material">
-                    <div class="linea-encabezado">
-                        <strong>${escaparHtml(m.Número_Material)}</strong>
-                        <span>${m.Cantidad_Piezas} pcs</span>
-                    </div>
-                    ${refHtml}
-                </div>
-            `;
-        }).join('');
-
-        nuevaTarima.innerHTML = `
-            <button class="btn-editar-tarima" title="Editar esta tarima">✎</button>
-            <button class="btn-agregar-material" title="Agregar otro material a esta tarima">+</button>
-            <button class="btn-eliminar-tarima" title="Eliminar esta tarima">×</button>
-            <div class="lineas-material">${lineasHtml}</div>
-        `;
-
-        // ASIGNAR EVENTO DE ELIMINACIÓN A LA "X"
-        const btnEliminar = nuevaTarima.querySelector('.btn-eliminar-tarima');
-        btnEliminar.addEventListener('click', function() {
-            // Confirmar antes de borrar, mostrando el detalle de lo que se va a perder.
-            // La "×" queda a unos pocos píxeles del "✎" y del "+", así que un clic
-            // accidental podría tirar una tarima con varios materiales.
-            const detalle = tarima.Materiales
-                .map(function(m) {
-                    const ref = m.Referencia ? ` — Ref: ${m.Referencia}` : '';
-                    return `  • ${m.Número_Material} — ${m.Cantidad_Piezas} pcs${ref}`;
-                })
-                .join('\n');
-
-            if (!confirm(`¿Eliminar la tarima T-${tarima.Posición_Tráiler}?\n\n${detalle}`)) {
-                return;
-            }
-
-            // Borramos el elemento del arreglo usando su índice actual
-            datosTrailer.splice(index, 1);
-
-            // Al quitar una tarima, todas las de atrás recorren su índice una posición.
-            // Si había otra tarima abierta en modo edición hay que reajustar el puntero,
-            // porque si no terminaríamos guardando esos materiales en la tarima equivocada.
-            if (editandoIndex !== null) {
-                if (index === editandoIndex) {
-                    // Se borró justamente la que se estaba editando: cerramos el formulario
-                    cerrarFormulario();
-                } else if (index < editandoIndex) {
-                    editandoIndex--;
-                }
-            }
-
-            guardarEstado();
-
-            // ¡Magia! Volvemos a renderizar para que la pantalla se actualice sola
-            renderizarTrailer();
-        });
-
-        // ASIGNAR EVENTO DE EDICIÓN AL LÁPIZ: trae todos los materiales para modificarlos
-        nuevaTarima.querySelector('.btn-editar-tarima').addEventListener('click', function() {
-            editandoIndex = index;
-            modoEdicion = 'editar';
-            lineasEdicionTemp = tarima.Materiales.map(function(m) {
-                return {
-                    Número_Material: m.Número_Material,
-                    Cantidad_Piezas: String(m.Cantidad_Piezas),
-                    Referencia: m.Referencia || ''
-                };
-            });
-            renderizarTrailer();
-        });
-
-        // ASIGNAR EVENTO AL "+": va DIRECTO al alta, con una sola línea en blanco.
-        // Los materiales que ya trae la tarima no se vuelven a abrir para editar.
-        nuevaTarima.querySelector('.btn-agregar-material').addEventListener('click', function() {
-            editandoIndex = index;
-            modoEdicion = 'agregar';
-            lineasEdicionTemp = [{ Número_Material: '', Cantidad_Piezas: '', Referencia: '' }];
-            renderizarTrailer();
-        });
-
-        // Agregar al mapa del tráiler
-        mapaTrailer.appendChild(nuevaTarima);
+        if (esEdicion) nodoEnEdicion = nodo;
     });
+
+    // 5. El formulario recién dibujado se lleva el foco, igual que antes
+    if (nodoEnEdicion) enfocarPrimeraFilaVacia(nodoEnEdicion);
 }
+
+// --- ACCIONES SOBRE UNA TARIMA ---
+
+// Del elemento donde ocurrió el evento a la tarima que lo contiene. La posición viaja en
+// el dataset del nodo y se reescribe en cada render, así que siempre apunta al dato real.
+function tarimaDesdeEvento(elemento) {
+    const nodo = elemento.closest('.tarima');
+    if (!nodo) return null;
+
+    const index = Number(nodo.dataset.posicion) - 1;
+    const tarima = datosTrailer[index];
+    if (!tarima) return null;
+
+    return { nodo: nodo, index: index, tarima: tarima };
+}
+
+function eliminarTarima(objetivo) {
+    // Confirmar antes de borrar, mostrando el detalle de lo que se va a perder.
+    // La "×" queda a unos pocos píxeles del "✎" y del "+", así que un clic
+    // accidental podría tirar una tarima con varios materiales.
+    const detalle = objetivo.tarima.Materiales
+        .map(function(m) {
+            const ref = m.Referencia ? ` — Ref: ${m.Referencia}` : '';
+            return `  • ${m.Número_Material} — ${m.Cantidad_Piezas} pcs${ref}`;
+        })
+        .join('\n');
+
+    if (!confirm(`¿Eliminar la tarima T-${objetivo.tarima.Posición_Tráiler}?\n\n${detalle}`)) {
+        return;
+    }
+
+    // Borramos el elemento del arreglo usando su índice actual
+    datosTrailer.splice(objetivo.index, 1);
+
+    // Al quitar una tarima, todas las de atrás recorren su índice una posición.
+    // Si había otra tarima abierta en modo edición hay que reajustar el puntero,
+    // porque si no terminaríamos guardando esos materiales en la tarima equivocada.
+    if (editandoIndex !== null) {
+        if (objetivo.index === editandoIndex) {
+            // Se borró justamente la que se estaba editando: cerramos el formulario
+            cerrarFormulario();
+        } else if (objetivo.index < editandoIndex) {
+            editandoIndex--;
+        }
+    }
+
+    guardarEstado();
+    renderizarTrailer();
+}
+
+function guardarEdicion(objetivo) {
+    const esAlta = modoEdicion === 'agregar';
+    const filas = leerFilasEdicionDesdeDOM(objetivo.nodo);
+    const materialesValidados = [];
+
+    for (const fila of filas) {
+        const matRaw = fila.Número_Material.trim();
+        const cantRaw = String(fila.Cantidad_Piezas).trim();
+        const refRaw = String(fila.Referencia || '').trim();
+
+        // fila vacía sin usar, se ignora
+        if (!matRaw && !cantRaw && !refRaw) continue;
+
+        const mat = matRaw.toUpperCase();
+        const cant = parseInt(cantRaw);
+        const ref = refRaw.toUpperCase();
+
+        if (!mat || isNaN(cant) || cant <= 0 || !ref) {
+            alert('Revisa los materiales: cada línea necesita número de material, una cantidad válida (mayor a 0) y referencia.');
+            return;
+        }
+        materialesValidados.push({
+            Número_Material: mat,
+            Cantidad_Piezas: cant,
+            Referencia: ref
+        });
+    }
+
+    if (materialesValidados.length === 0) {
+        alert(esAlta
+            ? 'Captura el material que quieres agregar, o cierra con la "×".'
+            : 'La tarima debe tener al menos un material válido.');
+        return;
+    }
+
+    // Al agregar sumamos a lo que ya traía; al editar reemplazamos todo
+    objetivo.tarima.Materiales = esAlta
+        ? objetivo.tarima.Materiales.concat(materialesValidados)
+        : materialesValidados;
+
+    cerrarFormulario();
+    guardarEstado();
+    renderizarTrailer();
+}
+
+function quitarLineaEdicion(objetivo, boton) {
+    const filas = Array.from(objetivo.nodo.querySelectorAll('.fila-material-edit'));
+    const i = filas.indexOf(boton.closest('.fila-material-edit'));
+    if (i < 0) return;
+
+    lineasEdicionTemp = leerFilasEdicionDesdeDOM(objetivo.nodo);
+
+    if (lineasEdicionTemp.length <= 1) {
+        if (modoEdicion === 'agregar') {
+            // Quitar la única línea nueva equivale a cancelar el alta
+            cerrarFormulario();
+            renderizarTrailer();
+            return;
+        }
+        alert('Una tarima debe tener al menos un material. Para quitarla por completo usa la "×" de la tarima.');
+        return;
+    }
+
+    lineasEdicionTemp.splice(i, 1);
+    renderizarTrailer();
+}
+
+// Agrega una fila en blanco al formulario, conservando lo ya capturado en pantalla
+function agregarLineaEdicion(objetivo) {
+    lineasEdicionTemp = leerFilasEdicionDesdeDOM(objetivo.nodo);
+    lineasEdicionTemp.push({ Número_Material: '', Cantidad_Piezas: '', Referencia: '' });
+    renderizarTrailer();
+}
+
+// --- DELEGACIÓN DE EVENTOS ---
+// Un solo par de listeners en el contenedor, montados una vez. Antes se reasignaban a
+// cada tarima en cada render; ahora los nodos se reutilizan, así que enganchar por nodo
+// duplicaría listeners en unos casos y los dejaría sin montar en otros.
+
+mapaTrailer.addEventListener('click', function(e) {
+    const boton = e.target.closest('button');
+    if (!boton) return;
+
+    const objetivo = tarimaDesdeEvento(boton);
+    if (!objetivo) return;
+
+    if (boton.classList.contains('btn-eliminar-tarima')) {
+        eliminarTarima(objetivo);
+
+    } else if (boton.classList.contains('btn-editar-tarima')) {
+        // El lápiz trae todos los materiales para modificarlos
+        editandoIndex = objetivo.index;
+        modoEdicion = 'editar';
+        lineasEdicionTemp = objetivo.tarima.Materiales.map(function(m) {
+            return {
+                Número_Material: m.Número_Material,
+                Cantidad_Piezas: String(m.Cantidad_Piezas),
+                Referencia: m.Referencia || ''
+            };
+        });
+        renderizarTrailer();
+
+    } else if (boton.classList.contains('btn-agregar-material')) {
+        // El "+" va DIRECTO al alta, con una sola línea en blanco. Los materiales que
+        // ya trae la tarima no se vuelven a abrir para editar.
+        editandoIndex = objetivo.index;
+        modoEdicion = 'agregar';
+        lineasEdicionTemp = [{ Número_Material: '', Cantidad_Piezas: '', Referencia: '' }];
+        renderizarTrailer();
+
+    } else if (boton.classList.contains('btn-guardar-edicion')) {
+        guardarEdicion(objetivo);
+
+    } else if (boton.classList.contains('btn-cancelar-edicion')) {
+        cerrarFormulario();
+        renderizarTrailer();
+
+    } else if (boton.classList.contains('btn-agregar-linea')) {
+        agregarLineaEdicion(objetivo);
+
+    } else if (boton.classList.contains('btn-quitar-linea')) {
+        quitarLineaEdicion(objetivo, boton);
+    }
+});
+
+// Misma cadena que el panel de captura: material -> cantidad -> referencia
+mapaTrailer.addEventListener('keypress', function(e) {
+    if (e.key !== 'Enter') return;
+
+    const campo = e.target;
+    const fila = campo.closest ? campo.closest('.fila-material-edit') : null;
+    if (!fila) return;
+
+    if (campo.classList.contains('edit-material')) {
+        e.preventDefault();
+        fila.querySelector('.edit-cantidad').focus();
+        return;
+    }
+
+    if (campo.classList.contains('edit-cantidad')) {
+        e.preventDefault();
+        fila.querySelector('.edit-referencia').focus();
+        return;
+    }
+
+    if (!campo.classList.contains('edit-referencia')) return;
+    e.preventDefault();
+
+    const objetivo = tarimaDesdeEvento(campo);
+    if (!objetivo) return;
+
+    const filas = Array.from(objetivo.nodo.querySelectorAll('.fila-material-edit'));
+    const i = filas.indexOf(fila);
+
+    if (i === filas.length - 1) {
+        // Enter en la última línea: agrega otra fila lista para escanear
+        agregarLineaEdicion(objetivo);
+    } else {
+        filas[i + 1].querySelector('.edit-material').focus();
+    }
+});
 
 // --- LÓGICA DE ESCÁNER (AUTO-FOCUS) ---
 
