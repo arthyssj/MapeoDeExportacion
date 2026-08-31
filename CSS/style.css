@@ -777,6 +777,17 @@ button {
     animation: aviso-entra 200ms ease-out;
 }
 
+/* Confirmación de escaneo. Reusa el verde que ya lleva el contador de tarimas, así que
+   no entra ningún tono nuevo a la paleta, con texto negro porque el blanco sobre ese
+   verde no se lee. Sale en cada tarima, así que va más discreto que el rojo de error:
+   sin sombra y con la tipografía normal. */
+.aviso-exito {
+    background-color: var(--verde-cifra);
+    color: var(--tarima-texto);
+    font-weight: 700;
+    box-shadow: none;
+}
+
 .aviso-texto {
     flex: 1;
     min-width: 0;
@@ -792,9 +803,11 @@ button {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: var(--btn-peligro-texto);
+    /* Hereda el color del aviso que lo contiene, para que siga siendo legible si algún
+       día una acción sale en un aviso que no sea rojo. */
+    color: inherit;
     background-color: transparent;
-    border: 1px solid var(--btn-peligro-texto);
+    border: 1px solid currentColor;
     border-radius: 6px;
     cursor: pointer;
 }

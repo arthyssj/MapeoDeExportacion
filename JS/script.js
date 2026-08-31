@@ -253,6 +253,9 @@ const MS_AVISO_VISIBLE = 3000;
 // El aviso con "Deshacer" dura más: 3 s alcanzan para leer un error, pero no para caer
 // en la cuenta de que acabas de borrar el conteo del tráiler y reaccionar.
 const MS_AVISO_DESHACER = 10000;
+// La confirmación de escaneo dura poco: el operador captura cada pocos segundos y uno
+// de 3 s seguiría en pantalla cuando ya llegó la tarima siguiente.
+const MS_AVISO_ESCANEO = 1500;
 const MS_CONTEO = 300;
 
 // Un solo punto donde se consulta la preferencia del sistema. El CSS ya apaga sus
@@ -294,23 +297,32 @@ function programarCierre(aviso, duracion) {
 function mostrarAviso(texto, opciones) {
     const accion = opciones && opciones.accion;
     const duracion = (opciones && opciones.duracion) || MS_AVISO_VISIBLE;
-    // Si el mismo mensaje ya está en pantalla se le reinicia el reloj en vez de apilar
-    // copias: al insistir con un escaneo inválido se llenaba la esquina de duplicados.
+    const tono = (opciones && opciones.tono) || 'error';
+    const grupo = opciones && opciones.grupo;
+
+    // Dos formas de no apilar avisos:
+    // - por texto: al insistir con un escaneo inválido se llenaba la pantalla de copias.
+    // - por grupo: la confirmación de cada tarima cambia de texto en cada escaneo, así
+    //   que sin esto una captura rápida dejaría una columna de avisos. El del grupo se
+    //   reescribe en su sitio y queda uno solo, siempre con la última tarima.
     // Los que ya se están desvaneciendo no cuentan: su retiro está programado, así que
     // reiniciarles el reloj dejaría el mensaje yéndose igual y sin toast de repuesto.
     const repetido = Array.from(contenedorAvisos.children).find(function(aviso) {
-        return aviso.dataset.texto === texto
-            && !aviso.classList.contains('aviso-saliendo');
+        if (aviso.classList.contains('aviso-saliendo')) return false;
+        return grupo ? aviso.dataset.grupo === grupo : aviso.dataset.texto === texto;
     });
 
     if (repetido) {
+        repetido.dataset.texto = texto;
+        repetido.querySelector('.aviso-texto').innerText = texto;
         programarCierre(repetido, duracion);
         return;
     }
 
     const aviso = document.createElement('div');
-    aviso.className = 'aviso';
+    aviso.className = tono === 'exito' ? 'aviso aviso-exito' : 'aviso';
     aviso.dataset.texto = texto;
+    if (grupo) aviso.dataset.grupo = grupo;
 
     // El texto va en su propio nodo para poder ponerle un botón al lado. innerText
     // convierte los saltos de línea en <br>, que es lo que queremos en los mensajes
@@ -992,6 +1004,16 @@ inputReferencia.addEventListener('keypress', function(e) {
         inputCantidad.value = '';
         inputReferencia.value = '';
         inputMaterial.focus();
+
+        // Confirmar QUÉ quedó registrado, no sólo que algo entró: la animación del mapa
+        // ya avisa de lo segundo, pero leer aquí el material y la cantidad es lo que
+        // permite cazar una cantidad mal escaneada sin apartar la vista del lector.
+        // Va al final para no anteponerse a dibujar, limpiar y devolver el foco.
+        mostrarAviso(`T-${datosTrailer.length}  ·  ${material}  ·  ${cantidad} pcs`, {
+            tono: 'exito',
+            grupo: 'escaneo',
+            duracion: MS_AVISO_ESCANEO
+        });
     }
 });
 
