@@ -368,6 +368,9 @@ button {
 /* La magia del Grid */
 .trailer-grid {
     display: grid;
+    /* Ancla para la tarima que se está borrando: JS la saca del flujo con
+       position:absolute y necesita medir desde el contenedor, no desde la página. */
+    position: relative;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     grid-template-rows: repeat(14, minmax(60px, auto));
     gap: 4px;
@@ -686,3 +689,123 @@ button {
 .btn-guardar-edicion:hover { background-color: #27ae60; }
 .btn-cancelar-edicion { background-color: #e74c3c; color: white; }
 .btn-cancelar-edicion:hover { background-color: #c0392b; }
+
+/* ============================================================
+   MOVIMIENTO
+   Ninguna duración pasa de 300 ms a propósito: esto es una herramienta de conteo y el
+   operador escanea sin levantar la vista del lector. La animación está para confirmar
+   que el escaneo entró, no para lucirse; si obliga a esperar, estorba.
+   Los colores salen de las variables ya existentes: aquí no se agrega paleta.
+   ============================================================ */
+
+@keyframes tarima-entra {
+    from { opacity: 0; transform: scale(0.88); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes tarima-sale {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(0.88); }
+}
+
+.tarima-entrando {
+    animation: tarima-entra 220ms ease-out;
+}
+
+/* La tarima que se borra se saca del flujo del grid desde JS (position:absolute) y se
+   desvanece encima. Así las de atrás se recorren de inmediato, en vez de quedarse
+   congeladas hasta que termine la salida. */
+.tarima-saliendo {
+    animation: tarima-sale 180ms ease-in forwards;
+    z-index: 2;
+}
+
+/* El desplazamiento de las tarimas que se recorren lo calcula JS con la técnica FLIP:
+   mide dónde estaban, las deja en su sitio nuevo y las manda de regreso con transform.
+   Aquí sólo vive la transición que las trae de vuelta a cero. */
+.tarima-deslizando {
+    transition: transform 200ms ease-out;
+}
+
+/* ============================================================
+   AVISOS (TOASTS)
+   Sustituyen a los alert(): un alert() detiene el hilo y se come el siguiente Enter
+   del lector, que es justo lo peor que puede pasar a media captura. Los confirm() de
+   borrado sí siguen bloqueando, porque ahí queremos que el operador se detenga.
+   ============================================================ */
+
+.avisos {
+    position: fixed;
+    /* Abajo y al centro, NO pegado a una esquina. El contenido de la app ocupa unos
+       760px centrados, así que en un monitor ancho una esquina queda a cientos de
+       píxeles de donde el operador está mirando y el aviso pasa desapercibido: es
+       justo lo que no puede pasar con los mensajes que antes eran alert().
+       Abajo y no arriba porque esa franja está vacía y no tapa ningún campo. */
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: min(420px, calc(100vw - 32px));
+    /* El contenedor cubre una franja de la pantalla aunque esté vacío: sin esto se
+       tragaría los clics sobre lo que tiene debajo. */
+    pointer-events: none;
+}
+
+.aviso {
+    pointer-events: auto;
+    cursor: pointer;
+    max-width: 100%;
+    background-color: var(--btn-peligro);
+    color: var(--btn-peligro-texto);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+    box-shadow: 0 4px 12px var(--sombra-panel);
+    animation: aviso-entra 200ms ease-out;
+}
+
+/* Entra subiendo desde abajo, que es de donde viene el contenedor */
+@keyframes aviso-entra {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes aviso-sale {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(12px); }
+}
+
+.aviso-saliendo {
+    animation: aviso-sale 180ms ease-in forwards;
+}
+
+/* ============================================================
+   MOVIMIENTO REDUCIDO
+   Si el sistema pide menos movimiento se apaga todo, incluidas las transiciones que
+   ya existían en botones. El JS consulta la misma preferencia por su cuenta (el
+   conteo de los contadores y el FLIP no son CSS y no se apagarían con esto solo).
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    /* Estas dos terminan en un estado invisible; anularlas del todo evita que una
+       tarima o un aviso se queden en opacity:0 esperando a que JS los retire. */
+    .tarima-saliendo,
+    .aviso-saliendo {
+        animation: none !important;
+    }
+}

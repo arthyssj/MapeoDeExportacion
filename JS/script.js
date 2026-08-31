@@ -25,6 +25,7 @@ const mapaTrailer = document.getElementById('mapa-trailer');
 const contadorTarimas = document.getElementById('contadorTarimas');
 const contadorPiezas = document.getElementById('contadorPiezas');
 const cuerpoResumen = document.getElementById('cuerpo-resumen');
+const contenedorAvisos = document.getElementById('avisos');
 
 // Escapa el texto que se inserta con innerHTML. Un número de parte con comillas
 // o "<" rompería el HTML del formulario de edición y corrompería lo mostrado.
@@ -78,7 +79,7 @@ function calcularResumenMateriales() {
 
 // Dibuja el total de piezas y la tabla agrupada por número de parte
 function renderizarResumen() {
-    contadorPiezas.innerText = calcularTotalPiezas().toLocaleString('es-MX');
+    animarContador(contadorPiezas, calcularTotalPiezas());
 
     const resumen = calcularResumenMateriales();
 
@@ -163,6 +164,212 @@ function leerFilasEdicionDesdeDOM(contenedor) {
             Referencia: fila.querySelector('.edit-referencia').value
         };
     });
+}
+
+// --- MOVIMIENTO, AVISOS Y CONTEO ---
+// Duraciones en un solo lugar. El tope es 300 ms a propósito: el operador escanea sin
+// levantar la vista del lector y una animación más larga lo hace esperar por adorno.
+// MS_SALIDA y MS_DESLIZAMIENTO están duplicados en style.css (.tarima-saliendo y
+// .tarima-deslizando): aquí marcan cuándo retirar el nodo o la clase, y si se cambian
+// allá hay que cambiarlos acá. La entrada no aparece porque se retira sola con
+// 'animationend' y su duración vive únicamente en el CSS.
+const MS_SALIDA = 180;
+const MS_DESLIZAMIENTO = 200;
+const MS_AVISO_SALIDA = 180;
+const MS_AVISO_VISIBLE = 3000;
+const MS_CONTEO = 300;
+
+// Un solo punto donde se consulta la preferencia del sistema. El CSS ya apaga sus
+// propias animaciones con @media, pero el FLIP y el conteo de cifras se calculan en JS
+// y no se enterarían: por eso también se pregunta aquí.
+function prefiereMenosMovimiento() {
+    return !!(window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// --- AVISOS (TOASTS) ---
+// Sustituyen a los alert(). Un alert() congela el hilo y se traga el siguiente Enter
+// del lector, así que a media captura llegaba a costar un escaneo. Los confirm() de
+// borrado siguen bloqueando: ahí sí queremos que el operador se detenga.
+
+function cerrarAviso(aviso) {
+    clearTimeout(Number(aviso.dataset.temporizador));
+
+    if (prefiereMenosMovimiento()) {
+        aviso.remove();
+        return;
+    }
+
+    aviso.classList.add('aviso-saliendo');
+    setTimeout(function() { aviso.remove(); }, MS_AVISO_SALIDA);
+}
+
+function programarCierre(aviso) {
+    clearTimeout(Number(aviso.dataset.temporizador));
+    aviso.dataset.temporizador = setTimeout(function() {
+        cerrarAviso(aviso);
+    }, MS_AVISO_VISIBLE);
+}
+
+function mostrarAviso(texto) {
+    // Si el mismo mensaje ya está en pantalla se le reinicia el reloj en vez de apilar
+    // copias: al insistir con un escaneo inválido se llenaba la esquina de duplicados.
+    // Los que ya se están desvaneciendo no cuentan: su retiro está programado, así que
+    // reiniciarles el reloj dejaría el mensaje yéndose igual y sin toast de repuesto.
+    const repetido = Array.from(contenedorAvisos.children).find(function(aviso) {
+        return aviso.dataset.texto === texto
+            && !aviso.classList.contains('aviso-saliendo');
+    });
+
+    if (repetido) {
+        programarCierre(repetido);
+        return;
+    }
+
+    const aviso = document.createElement('div');
+    aviso.className = 'aviso';
+    aviso.dataset.texto = texto;
+    aviso.innerText = texto;
+
+    // Poder cerrarlo de un clic: 3 s tapando la esquina estorban si ya se leyó
+    aviso.addEventListener('click', function() { cerrarAviso(aviso); });
+
+    contenedorAvisos.appendChild(aviso);
+    programarCierre(aviso);
+}
+
+// --- CONTEO DE LAS CIFRAS ---
+// Guardadas por elemento y no en variables sueltas para poder cancelar la animación en
+// curso: al escanear rápido llegan varios cambios antes de que termine la anterior.
+const conteosEnCurso = new WeakMap();
+
+// Lleva el número de su valor actual al nuevo en vez de saltar de golpe. Con el salto
+// seco cuesta ver de reojo que la cifra cambió; el recorrido lo vuelve evidente sin
+// obligar a mirar de frente.
+function animarContador(elemento, valorFinal) {
+    const enCurso = conteosEnCurso.get(elemento);
+    if (enCurso) cancelAnimationFrame(enCurso.frame);
+
+    // De dónde arranca: lo que se esté mostrando ahora mismo si veníamos a medio
+    // recorrido, o el último valor confirmado si el contador estaba quieto.
+    const valorInicial = enCurso
+        ? enCurso.valor
+        : Number(elemento.dataset.valor || 0);
+
+    if (valorInicial === valorFinal || prefiereMenosMovimiento()) {
+        conteosEnCurso.delete(elemento);
+        elemento.dataset.valor = valorFinal;
+        elemento.innerText = valorFinal.toLocaleString('es-MX');
+        return;
+    }
+
+    const inicio = performance.now();
+
+    function paso(ahora) {
+        const avance = Math.min((ahora - inicio) / MS_CONTEO, 1);
+        // Frena al final en vez de cortarse en seco
+        const suavizado = 1 - Math.pow(1 - avance, 3);
+        const valor = Math.round(valorInicial + (valorFinal - valorInicial) * suavizado);
+
+        elemento.innerText = valor.toLocaleString('es-MX');
+
+        if (avance < 1) {
+            conteosEnCurso.set(elemento, { frame: requestAnimationFrame(paso), valor: valor });
+            return;
+        }
+
+        // El valor definitivo sólo se sella al terminar: si se cancela a medio camino,
+        // el siguiente conteo tiene que arrancar de lo que se está viendo.
+        conteosEnCurso.delete(elemento);
+        elemento.dataset.valor = valorFinal;
+    }
+
+    conteosEnCurso.set(elemento, {
+        frame: requestAnimationFrame(paso),
+        valor: valorInicial
+    });
+}
+
+// --- ENTRADA, SALIDA Y DESLIZAMIENTO DE LAS TARIMAS ---
+
+// Dónde está cada tarima en pantalla ahora mismo. Se toma ANTES de modificar los datos:
+// es el "antes" que necesita el FLIP para saber cuánto se movió cada una.
+function capturarGeometria() {
+    const geometria = new Map();
+    nodosTarima.forEach(function(entrada, posicion) {
+        geometria.set(posicion, entrada.nodo.getBoundingClientRect());
+    });
+    return geometria;
+}
+
+// Saca la tarima del flujo del grid dejándola clavada donde estaba, y la desvanece
+// encima. Es lo que permite que las siguientes se recorran de inmediato: si se quedara
+// ocupando su celda, el hueco no aparecería hasta terminar la animación.
+function animarSalida(nodo) {
+    const contenedor = mapaTrailer.getBoundingClientRect();
+    const propio = nodo.getBoundingClientRect();
+    const estilos = getComputedStyle(mapaTrailer);
+
+    // position:absolute se mide desde el borde interior del contenedor; el grid tiene
+    // bordes laterales de 4px y sin descontarlos la tarima se recorre al desvanecerse.
+    const bordeIzquierdo = parseFloat(estilos.borderLeftWidth) || 0;
+    const bordeSuperior = parseFloat(estilos.borderTopWidth) || 0;
+
+    nodo.style.position = 'absolute';
+    nodo.style.left = (propio.left - contenedor.left - bordeIzquierdo) + 'px';
+    nodo.style.top = (propio.top - contenedor.top - bordeSuperior) + 'px';
+    nodo.style.width = propio.width + 'px';
+    nodo.style.height = propio.height + 'px';
+    nodo.style.pointerEvents = 'none';
+    nodo.classList.add('tarima-saliendo');
+
+    setTimeout(function() { nodo.remove(); }, MS_SALIDA);
+}
+
+// FLIP para las tarimas que se recorren al borrar una. Los nodos ya están dibujados en
+// su lugar definitivo: se les aplica el desplazamiento inverso y se deja que la
+// transición los traiga de vuelta a cero.
+// El desfase de una posición es porque lo que hoy se ve en la posición P estaba en la
+// P+1 antes de borrar; el nodo puede incluso ser otro, lo que se mueve es el contenido.
+function deslizarTrasBorrado(geometriaPrevia, desdePosicion) {
+    const enMovimiento = [];
+
+    nodosTarima.forEach(function(entrada, posicion) {
+        if (posicion < desdePosicion) return;
+
+        const antes = geometriaPrevia.get(posicion + 1);
+        if (!antes) return;
+
+        const ahora = entrada.nodo.getBoundingClientRect();
+        const dx = antes.left - ahora.left;
+        const dy = antes.top - ahora.top;
+        if (!dx && !dy) return;
+
+        entrada.nodo.style.transform = `translate(${dx}px, ${dy}px)`;
+        enMovimiento.push(entrada.nodo);
+    });
+
+    if (enMovimiento.length === 0) return;
+
+    // Dos frames: el primero pinta las tarimas desplazadas y todavía sin transición. Si
+    // se quitara el transform en el mismo frame, el navegador uniría ambos estados en
+    // uno solo y no habría nada que animar.
+    requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+            enMovimiento.forEach(function(nodo) {
+                nodo.classList.add('tarima-deslizando');
+                nodo.style.transform = '';
+            });
+        });
+    });
+
+    // La clase se retira al terminar para no dejar una transición colgada en un nodo
+    // que después se reutiliza (el render conserva los que no cambiaron).
+    setTimeout(function() {
+        enMovimiento.forEach(function(nodo) {
+            nodo.classList.remove('tarima-deslizando');
+        });
+    }, MS_DESLIZAMIENTO + 20);
 }
 
 // --- DIBUJO DEL TRÁILER (RENDER INCREMENTAL) ---
@@ -277,14 +484,29 @@ function enfocarPrimeraFilaVacia(nodo) {
     inputAEnfocar.select();
 }
 
+// El primer nodo que sigue en el DOM después de una posición dada. Sirve para insertar
+// una tarima nueva en su celda y no al final: al borrar, la posición liberada se vuelve
+// a construir con el contenido de la siguiente y tiene que caer en su sitio.
+function nodoDespuesDe(posicion) {
+    for (let p = posicion + 1; p <= datosTrailer.length; p++) {
+        const entrada = nodosTarima.get(p);
+        if (entrada) return entrada.nodo;
+    }
+    return null;
+}
+
 // --- RENDER: SÓLO SE REHACE LO QUE CAMBIÓ ---
-function renderizarTrailer() {
+// opciones.entradaEn: posición que debe entrar animada (la tarima recién escaneada).
+// Va como parámetro y no como "toda tarima nueva" porque al borrar también se crean
+// nodos, y ahí lo que corresponde es deslizarse, no aparecer de golpe.
+function renderizarTrailer(opciones) {
+    const entradaEn = (opciones && opciones.entradaEn) || null;
     // 1. Corregir las posiciones (por si borramos una intermedia, se reajustan de 1 a N)
     renumerarPosiciones();
 
     // 2. Sincronizar el contador global con el tamaño real del arreglo
     totalTarimas = datosTrailer.length;
-    contadorTarimas.innerText = totalTarimas;
+    animarContador(contadorTarimas, totalTarimas);
 
     // Actualizar totales y el agrupado por número de parte
     renderizarResumen();
@@ -324,9 +546,15 @@ function renderizarTrailer() {
         if (previo) {
             previo.nodo.replaceWith(nodo);
         } else {
-            // Las posiciones se recorren en orden y las que faltan son siempre las
-            // últimas, así que agregar al final respeta el orden del grid.
-            mapaTrailer.appendChild(nodo);
+            // insertBefore con null equivale a agregar al final
+            mapaTrailer.insertBefore(nodo, nodoDespuesDe(posicion));
+
+            if (posicion === entradaEn && !prefiereMenosMovimiento()) {
+                nodo.classList.add('tarima-entrando');
+                nodo.addEventListener('animationend', function() {
+                    nodo.classList.remove('tarima-entrando');
+                }, { once: true });
+            }
         }
 
         nodosTarima.set(posicion, { nodo: nodo, firma: firma });
@@ -368,6 +596,19 @@ function eliminarTarima(objetivo) {
         return;
     }
 
+    const animar = !prefiereMenosMovimiento();
+
+    // La foto de "dónde estaba cada tarima" se toma antes de tocar los datos: es el
+    // punto de partida del deslizamiento de las que se recorren.
+    const geometriaPrevia = animar ? capturarGeometria() : null;
+
+    if (animar) {
+        // El mapa suelta el nodo antes de sacarlo del flujo, para que el render no
+        // intente reutilizarlo ni reemplazarlo a media animación de salida.
+        nodosTarima.delete(objetivo.index + 1);
+        animarSalida(objetivo.nodo);
+    }
+
     // Borramos el elemento del arreglo usando su índice actual
     datosTrailer.splice(objetivo.index, 1);
 
@@ -385,6 +626,10 @@ function eliminarTarima(objetivo) {
 
     guardarEstado();
     renderizarTrailer();
+
+    // Ya con todo dibujado en su lugar definitivo, se manda a las tarimas de atrás
+    // desde donde estaban hasta donde quedaron.
+    if (animar) deslizarTrasBorrado(geometriaPrevia, objetivo.index + 1);
 }
 
 function guardarEdicion(objetivo) {
@@ -405,7 +650,7 @@ function guardarEdicion(objetivo) {
         const ref = refRaw.toUpperCase();
 
         if (!mat || isNaN(cant) || cant <= 0 || !ref) {
-            alert('Revisa los materiales: cada línea necesita número de material, una cantidad válida (mayor a 0) y referencia.');
+            mostrarAviso('Revisa los materiales: cada línea necesita número de material, una cantidad válida (mayor a 0) y referencia.');
             return;
         }
         materialesValidados.push({
@@ -416,7 +661,7 @@ function guardarEdicion(objetivo) {
     }
 
     if (materialesValidados.length === 0) {
-        alert(esAlta
+        mostrarAviso(esAlta
             ? 'Captura el material que quieres agregar, o cierra con la "×".'
             : 'La tarima debe tener al menos un material válido.');
         return;
@@ -446,7 +691,7 @@ function quitarLineaEdicion(objetivo, boton) {
             renderizarTrailer();
             return;
         }
-        alert('Una tarima debe tener al menos un material. Para quitarla por completo usa la "×" de la tarima.');
+        mostrarAviso('Una tarima debe tener al menos un material. Para quitarla por completo usa la "×" de la tarima.');
         return;
     }
 
@@ -581,7 +826,7 @@ inputCantidad.addEventListener('keypress', function(e) {
         const cantidad = parseInt(inputCantidad.value.trim());
 
         if (isNaN(cantidad) || cantidad <= 0) {
-            alert("Cantidad inválida");
+            mostrarAviso("Cantidad inválida");
             inputCantidad.focus();
             return;
         }
@@ -601,7 +846,7 @@ inputReferencia.addEventListener('keypress', function(e) {
 
         // Validar campos vacíos
         if (!material || isNaN(cantidad) || cantidad <= 0 || !referencia) {
-            alert("Faltan datos: se necesita material, cantidad válida y referencia.");
+            mostrarAviso("Faltan datos: se necesita material, cantidad válida y referencia.");
             if (!material) {
                 inputMaterial.focus();
             } else if (isNaN(cantidad) || cantidad <= 0) {
@@ -614,7 +859,7 @@ inputReferencia.addEventListener('keypress', function(e) {
 
        // Validar límite físico usando el tamaño real del array
         if (datosTrailer.length >= MAX_CAPACIDAD) {
-            alert(`¡ALTO! La caja del tráiler está llena (${MAX_CAPACIDAD} tarimas máximo).`);
+            mostrarAviso(`¡ALTO! La caja del tráiler está llena (${MAX_CAPACIDAD} tarimas máximo).`);
             inputMaterial.value = '';
             inputCantidad.value = '';
             inputReferencia.value = '';
@@ -634,9 +879,10 @@ inputReferencia.addEventListener('keypress', function(e) {
             ]
         });
 
-        // Guardar progreso y llamar a nuestra función de dibujo
+        // Guardar progreso y llamar a nuestra función de dibujo. La posición recién
+        // ocupada es la última, y es la única que debe entrar animada.
         guardarEstado();
-        renderizarTrailer();
+        renderizarTrailer({ entradaEn: datosTrailer.length });
 
         // Limpiar para el siguiente ciclo del escáner
         inputMaterial.value = '';
@@ -784,13 +1030,13 @@ function generarExcel() {
 
     } catch (error) {
         console.error("Error crítico al generar Excel:", error);
-        alert("Hubo un problema al generar el archivo. Presiona F12 para ver el error.");
+        mostrarAviso("Hubo un problema al generar el archivo. Presiona F12 para ver el error.");
     }
 }
 
 document.getElementById('btnExportar').addEventListener('click', function() {
     if (datosTrailer.length === 0) {
-        alert("No hay datos para exportar. Escanea al menos una tarima.");
+        mostrarAviso("No hay datos para exportar. Escanea al menos una tarima.");
         return;
     }
 
@@ -799,7 +1045,7 @@ document.getElementById('btnExportar').addEventListener('click', function() {
         .then(generarExcel)
         .catch(function(error) {
             console.error('No se pudo cargar SheetJS:', error);
-            alert('No se pudo cargar el generador de Excel.\n\nRevisa que exista el archivo JS/xlsx.full.min.js junto a la página.');
+            mostrarAviso('No se pudo cargar el generador de Excel.\n\nRevisa que exista el archivo JS/xlsx.full.min.js junto a la página.');
         });
 });
 

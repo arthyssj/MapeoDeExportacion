@@ -27,6 +27,10 @@
         <button id="btnTema" class="btn-tema" type="button" aria-label="Cambiar tema">☀</button>
     </header>
 
+    <!-- Avisos no bloqueantes (reemplazan a los alert()). aria-live los anuncia sin
+         robar el foco, que durante la captura tiene que quedarse en el campo. -->
+    <div id="avisos" class="avisos" role="status" aria-live="polite"></div>
+
     <main id="app-container">
         <section id="panel-controles">
             <div class="input-group">
