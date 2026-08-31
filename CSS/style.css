@@ -762,6 +762,9 @@ button {
     pointer-events: auto;
     cursor: pointer;
     max-width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 14px;
     background-color: var(--btn-peligro);
     color: var(--btn-peligro-texto);
     border-radius: 8px;
@@ -772,6 +775,33 @@ button {
     text-align: center;
     box-shadow: 0 4px 12px var(--sombra-panel);
     animation: aviso-entra 200ms ease-out;
+}
+
+.aviso-texto {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Botón de acción del aviso (p. ej. "Deshacer"). Delineado en el color del texto en vez
+   de un color propio: así no hace falta meter un tono nuevo a la paleta y se lee bien
+   sobre el rojo del aviso en los dos temas. */
+.aviso-accion {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--btn-peligro-texto);
+    background-color: transparent;
+    border: 1px solid var(--btn-peligro-texto);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.aviso-accion:hover {
+    background-color: var(--btn-peligro-texto);
+    color: var(--btn-peligro);
 }
 
 /* Entra subiendo desde abajo, que es de donde viene el contenedor */

@@ -250,6 +250,9 @@ const MS_SALIDA = 180;
 const MS_DESLIZAMIENTO = 200;
 const MS_AVISO_SALIDA = 180;
 const MS_AVISO_VISIBLE = 3000;
+// El aviso con "Deshacer" dura más: 3 s alcanzan para leer un error, pero no para caer
+// en la cuenta de que acabas de borrar el conteo del tráiler y reaccionar.
+const MS_AVISO_DESHACER = 10000;
 const MS_CONTEO = 300;
 
 // Un solo punto donde se consulta la preferencia del sistema. El CSS ya apaga sus
@@ -277,14 +280,20 @@ function cerrarAviso(aviso) {
     setTimeout(function() { aviso.remove(); }, MS_AVISO_SALIDA);
 }
 
-function programarCierre(aviso) {
+function programarCierre(aviso, duracion) {
     clearTimeout(Number(aviso.dataset.temporizador));
     aviso.dataset.temporizador = setTimeout(function() {
         cerrarAviso(aviso);
-    }, MS_AVISO_VISIBLE);
+    }, duracion || MS_AVISO_VISIBLE);
 }
 
-function mostrarAviso(texto) {
+// mostrarAviso(texto)
+// mostrarAviso(texto, { duracion, accion: { texto, alPulsar } })
+// La acción va DENTRO del aviso a propósito: la decisión queda donde ya está la mirada,
+// sin obligar al operador a buscar un botón en otra parte de la pantalla.
+function mostrarAviso(texto, opciones) {
+    const accion = opciones && opciones.accion;
+    const duracion = (opciones && opciones.duracion) || MS_AVISO_VISIBLE;
     // Si el mismo mensaje ya está en pantalla se le reinicia el reloj en vez de apilar
     // copias: al insistir con un escaneo inválido se llenaba la esquina de duplicados.
     // Los que ya se están desvaneciendo no cuentan: su retiro está programado, así que
@@ -295,20 +304,41 @@ function mostrarAviso(texto) {
     });
 
     if (repetido) {
-        programarCierre(repetido);
+        programarCierre(repetido, duracion);
         return;
     }
 
     const aviso = document.createElement('div');
     aviso.className = 'aviso';
     aviso.dataset.texto = texto;
-    aviso.innerText = texto;
+
+    // El texto va en su propio nodo para poder ponerle un botón al lado. innerText
+    // convierte los saltos de línea en <br>, que es lo que queremos en los mensajes
+    // de dos renglones.
+    const cuerpo = document.createElement('span');
+    cuerpo.className = 'aviso-texto';
+    cuerpo.innerText = texto;
+    aviso.appendChild(cuerpo);
+
+    if (accion) {
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'aviso-accion';
+        boton.innerText = accion.texto;
+        boton.addEventListener('click', function(evento) {
+            // Sin esto, el clic seguiría hasta el aviso y sólo lo cerraría
+            evento.stopPropagation();
+            cerrarAviso(aviso);
+            accion.alPulsar();
+        });
+        aviso.appendChild(boton);
+    }
 
     // Poder cerrarlo de un clic: 3 s tapando la pantalla estorban si ya se leyó
     aviso.addEventListener('click', function() { cerrarAviso(aviso); });
 
     contenedorAvisos.appendChild(aviso);
-    programarCierre(aviso);
+    programarCierre(aviso, duracion);
 }
 
 // --- CONTEO DE LAS CIFRAS ---
@@ -1135,8 +1165,58 @@ document.getElementById('btnExportar').addEventListener('click', function() {
 });
 
 // --- BOTÓN CANCELAR / LIMPIAR ---
+// Cancelar está pegado a Exportar y basta un clic por inercia para tirar el conteo de un
+// tráiler entero, que significa volver a contarlo físicamente. El confirm() no alcanza:
+// un diálogo que sale siempre se acepta sin leer. Por eso, antes de borrar se guarda una
+// copia y se ofrece deshacer.
+// La copia va en memoria Y en su propia llave: en memoria para que deshacer funcione
+// aunque el almacenamiento esté caído, y en el almacén para que sobreviva a un cierre
+// accidental del navegador justo después del error.
+const RESPALDO_KEY = 'generadorCajaRespaldo';
+let respaldoEnMemoria = null;
+
+function restaurarRespaldo() {
+    // La copia en memoria manda: es al menos tan reciente como la guardada.
+    let estado = respaldoEnMemoria;
+
+    if (!estado) {
+        const texto = leerAlmacen(RESPALDO_KEY);
+        if (texto) {
+            try {
+                estado = JSON.parse(texto);
+            } catch (error) {
+                console.error('El respaldo guardado no se pudo leer:', error);
+            }
+        }
+    }
+
+    if (!estado) {
+        mostrarAviso('Ya no hay nada que restaurar.');
+        return;
+    }
+
+    inputCaja.value = estado.numCaja || '';
+    datosTrailer = normalizarTarimas(estado.datosTrailer);
+    cerrarFormulario();
+    guardarEstado();
+    renderizarTrailer();
+
+    mostrarAviso('Progreso restaurado: ' + datosTrailer.length + ' tarima(s).');
+}
+
 document.getElementById('btnCancelar').addEventListener('click', function() {
     if(confirm("¿Estás seguro de que quieres borrar todo el progreso actual?")) {
+        // Sólo hay algo que deshacer si de verdad se estaba perdiendo trabajo
+        const habiaTrabajo = datosTrailer.length > 0;
+
+        if (habiaTrabajo) {
+            respaldoEnMemoria = {
+                numCaja: inputCaja.value,
+                datosTrailer: datosTrailer
+            };
+            escribirAlmacen(RESPALDO_KEY, JSON.stringify(respaldoEnMemoria));
+        }
+
         // Reiniciar el estado en memoria
         datosTrailer = [];
         cerrarFormulario();
@@ -1156,6 +1236,13 @@ document.getElementById('btnCancelar').addEventListener('click', function() {
         renderizarTrailer();
 
         inputCaja.focus();
+
+        if (habiaTrabajo) {
+            mostrarAviso('Progreso borrado.', {
+                duracion: MS_AVISO_DESHACER,
+                accion: { texto: 'Deshacer', alPulsar: restaurarRespaldo }
+            });
+        }
     }
 });
 
