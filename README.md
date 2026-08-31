@@ -23,10 +23,17 @@ Sustituye el mapeo manual en papel o en hojas de cálculo hechas a mano.
   parte, cada uno con su cantidad y referencia.
 - **No se pierde el avance.** Todo se guarda en el navegador conforme se escanea; si se
   refresca la página o se cierra por accidente, al volver a abrir sigue ahí.
+- **Avisos que no interrumpen.** Los mensajes salen como notas que se cierran solas, sin
+  cortar la captura. Sólo los borrados piden confirmación y detienen el trabajo.
+- **Deshacer el borrado.** Si se pulsa *Cancelar* por error, hay unos segundos para
+  recuperar todo el conteo.
 - **Totales en vivo.** Total de tarimas, total de piezas y un resumen agrupado por número
   de parte para cotejar contra el packing list.
-- **Funciona sin internet.** La exportación a Excel usa una copia local de la librería si
-  no hay conexión.
+- **Avance de la caja a la vista.** Una barra en el encabezado se llena conforme avanza el
+  tráiler y cambia de color en las últimas posiciones.
+- **Modo claro y oscuro.** Con botón en el encabezado; recuerda la preferencia.
+- **Funciona sin internet.** No hace ninguna petición a la red: la librería de Excel viaja
+  dentro del propio repositorio.
 
 ---
 
@@ -34,12 +41,14 @@ Sustituye el mapeo manual en papel o en hojas de cálculo hechas a mano.
 
 ### Capturar
 
-1. Escanea o escribe el **número de caja** del tráiler y presiona Enter.
+1. Escanea o escribe el **título, transporte o unidad** y presiona Enter.
 2. Escanea el **material** (número de parte) → Enter.
 3. Escanea o escribe la **cantidad** de piezas → Enter.
 4. Escanea o escribe la **referencia** → Enter.
 
 La tarima aparece en el mapa y el cursor regresa a *Material*, listo para la siguiente.
+Abajo aparece un momento la confirmación de lo que quedó registrado —posición, material y
+cantidad— para poder cazar un escaneo equivocado sin apartar la vista del lector.
 Repite hasta terminar la caja.
 
 > Los tres campos son obligatorios. Si algo falta o la cantidad es cero, avisa y deja el
@@ -55,18 +64,19 @@ Al pasar el mouse sobre una tarima aparecen tres botones:
 | **+** | Agrega otro material a esa tarima, sin tocar los que ya tiene |
 | **×** | Elimina la tarima completa (pide confirmación y muestra qué se va a perder) |
 
-Al eliminar una tarima intermedia, las siguientes se renumeran solas para que las
-posiciones queden siempre de 1 a N.
+Al eliminar una tarima intermedia, las siguientes se recorren y se renumeran solas para que
+las posiciones queden siempre de 1 a N.
 
 ### Exportar
 
 El botón **Exportar** descarga el archivo con el nombre:
 
 ```
-Caja-{NÚMERO DE CAJA}-{AAAA}-{MM}-{DD}.xlsx
+{TÍTULO}-{MM}-{DD}-{AAAA}.xlsx
 ```
 
-El botón **Cancelar** borra todo el progreso (pide confirmación) para empezar otra caja.
+El botón **Cancelar** borra todo el progreso para empezar otra caja. Pide confirmación, y
+después ofrece **Deshacer** durante unos segundos por si fue un clic accidental.
 
 ---
 
@@ -131,7 +141,7 @@ git clone https://github.com/arthyssj/generadorCaja.git
 O desde GitHub: **Code → Download ZIP**, descomprimir y abrir `index.html`.
 
 Funciona igual sin conexión a internet: la captura, el respaldo y la exportación a Excel
-operan por completo dentro del navegador.
+operan por completo dentro del navegador, y la página no carga nada de fuera.
 
 > **Importante:** el navegador guarda el avance por separado en la versión en línea y en la
 > local. No conviene alternar entre las dos a media captura, porque cada una lleva su propio
@@ -141,25 +151,42 @@ operan por completo dentro del navegador.
 
 ## Notas técnicas
 
-- HTML, CSS y JavaScript sin frameworks ni proceso de compilación.
-- El avance se guarda en `localStorage` bajo la llave `generadorCajaEstado`. El botón
-  *Cancelar* lo borra.
-- El Excel se genera con [SheetJS](https://sheetjs.com/). Se intenta cargar desde su CDN y,
-  si no está disponible, se usa la copia local incluida en `JS/xlsx.full.min.js`.
-- La capacidad del tráiler está en la constante `MAX_CAPACIDAD` (28) al inicio de
-  `JS/script.js`. Si se cambia, hay que ajustar también `grid-template-rows` en
-  `CSS/style.css` y el número de filas del mapa en la exportación.
+- HTML, CSS y JavaScript sin frameworks, sin dependencias externas y sin proceso de
+  compilación.
+- El navegador guarda tres cosas, cada una en su propia llave, para que borrar una no
+  afecte a las otras:
+
+  | Llave | Qué guarda |
+  |---|---|
+  | `generadorCajaEstado` | El avance de la caja. Lo borra *Cancelar*. |
+  | `generadorCajaRespaldo` | La copia para *Deshacer* el último borrado. |
+  | `generadorCajaTema` | La preferencia de modo claro u oscuro. |
+
+- Si el navegador impide guardar (disco lleno, almacenamiento bloqueado por política), la
+  app **no se detiene**: sigue capturando y exportando, y avisa una vez que al recargar se
+  perdería lo hecho.
+- El Excel se genera con [SheetJS](https://sheetjs.com/), desde la copia incluida en
+  `JS/xlsx.full.min.js`. No se usa CDN: evita depender de la red y de que un servidor ajeno
+  sirva el archivo esperado.
+- Las medidas del tráiler viven en `FILAS_TRAILER` y `COLUMNAS_TRAILER` al inicio de
+  `JS/script.js`; `MAX_CAPACIDAD` se deriva de ellas, y tanto la rejilla en pantalla como el
+  mapa del Excel las siguen solas. Lo único que habría que ajustar a mano al cambiarlas es
+  el ancho en píxeles del tráiler en `CSS/style.css`.
+- Las animaciones se mantienen por debajo de 300 ms —es una herramienta de trabajo— y se
+  desactivan por completo si el sistema pide menos movimiento
+  (`prefers-reduced-motion: reduce`).
 
 ### Estructura
 
 ```
 generadorCaja/
 ├── index.html              # Interfaz
-├── CSS/style.css           # Estilos
+├── CLAUDE.md               # Notas de arquitectura para Claude Code
+├── CSS/style.css           # Estilos y paleta (variables por tema)
 ├── JS/
 │   ├── script.js           # Toda la lógica
-│   └── xlsx.full.min.js    # SheetJS (respaldo sin internet)
-└── IMG/icon.png            # Favicon
+│   └── xlsx.full.min.js    # SheetJS
+└── IMG/icon_2.png          # Favicon
 ```
 
 ### Modelo de datos
@@ -172,3 +199,6 @@ generadorCaja/
   ]
 }
 ```
+
+Al abrir, el avance guardado se normaliza a este formato, así que un respaldo escrito por
+una versión anterior de la app se sigue recuperando sin perder nada.
