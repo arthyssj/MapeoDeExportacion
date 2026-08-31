@@ -1,6 +1,7 @@
 # Generador de Caja
 
 ![image Main](Screenshot.png)
+![image Main](Screenshot-2.png)
 
 Herramienta web para mapear la carga de un tráiler de exportación a **DSV**.
 
