@@ -25,6 +25,14 @@
     <header>
         <h1>Mapeo de Exportacion</h1>
         <button id="btnTema" class="btn-tema" type="button" aria-label="Cambiar tema">☀</button>
+
+        <!-- Avance de llenado de la caja. Cubre exactamente el borde inferior del
+             encabezado, así que no añade altura ni desplaza nada. El máximo lo pone
+             script.js desde MAX_CAPACIDAD, para no repetir aquí el número. -->
+        <div id="progresoTrailer" class="header-progreso" role="progressbar"
+             aria-valuemin="0" aria-valuenow="0" aria-label="Posiciones ocupadas del tráiler">
+            <div id="progresoTrailerRelleno" class="header-progreso-relleno"></div>
+        </div>
     </header>
 
     <!-- Avisos no bloqueantes (reemplazan a los alert()). aria-live los anuncia sin

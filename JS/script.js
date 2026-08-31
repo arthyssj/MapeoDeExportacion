@@ -8,6 +8,9 @@
 const FILAS_TRAILER = 14;
 const COLUMNAS_TRAILER = 2;
 const MAX_CAPACIDAD = FILAS_TRAILER * COLUMNAS_TRAILER;
+// A partir de cuántas posiciones libres la barra del encabezado avisa que se acaba la
+// caja. Tres da margen para reacomodar lo que falte sin que el tope llegue de sorpresa.
+const AVISO_ULTIMAS = 3;
 const STORAGE_KEY = 'generadorCajaEstado';
 let totalTarimas = 0;
 let datosTrailer = []; // Array en memoria para exportar a Excel
@@ -34,6 +37,8 @@ const contadorTarimas = document.getElementById('contadorTarimas');
 const contadorPiezas = document.getElementById('contadorPiezas');
 const cuerpoResumen = document.getElementById('cuerpo-resumen');
 const contenedorAvisos = document.getElementById('avisos');
+const barraProgreso = document.getElementById('progresoTrailer');
+const rellenoProgreso = document.getElementById('progresoTrailerRelleno');
 
 // El grid del mapa se dibuja con las medidas de arriba. Se las pasamos al CSS en vez de
 // repetir los números allá, para que el layout siga al dato y no al revés. style.css
@@ -41,6 +46,10 @@ const contenedorAvisos = document.getElementById('avisos');
 // esta línea no llegue a correr.
 document.documentElement.style.setProperty('--filas-trailer', String(FILAS_TRAILER));
 document.documentElement.style.setProperty('--columnas-trailer', String(COLUMNAS_TRAILER));
+
+// El tope de la barra de avance también sale de la capacidad, por lo mismo: que el
+// número viva en un solo sitio y no haya que acordarse de este al cambiar la caja.
+barraProgreso.setAttribute('aria-valuemax', String(MAX_CAPACIDAD));
 
 // Escapa el texto que se inserta con innerHTML. Un número de parte con comillas
 // o "<" rompería el HTML del formulario de edición y corrompería lo mostrado.
@@ -625,6 +634,21 @@ function renderizarTrailer(opciones) {
 
     // El estado vacío del mapa lo enciende y apaga el CSS con esta clase
     mapaTrailer.classList.toggle('trailer-sin-tarimas', totalTarimas === 0);
+
+    // Avance de llenado en el encabezado. Se topa en 100% porque el arreglo puede traer
+    // más tarimas que la capacidad si se recupera un guardado de una caja más grande.
+    const llenado = Math.min(totalTarimas / MAX_CAPACIDAD, 1);
+    rellenoProgreso.style.width = (llenado * 100) + '%';
+    barraProgreso.setAttribute('aria-valuenow', String(totalTarimas));
+
+    // Cambia de color en las últimas posiciones para que el operador vea venir el tope
+    // en vez de enterarse cuando el escaneo ya rebotó con el "¡ALTO!".
+    const libres = MAX_CAPACIDAD - totalTarimas;
+    rellenoProgreso.classList.toggle('cerca-del-tope', libres > 0 && libres <= AVISO_ULTIMAS);
+    rellenoProgreso.classList.toggle('al-tope', libres <= 0);
+
+    // Con la caja vacía la línea se ve azul y limpia, sin el filo que marca el avance
+    rellenoProgreso.classList.toggle('con-avance', totalTarimas > 0);
 
     // Actualizar totales y el agrupado por número de parte
     renderizarResumen();
