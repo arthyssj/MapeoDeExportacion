@@ -123,50 +123,108 @@ function renumerarPosiciones() {
     });
 }
 
+// --- ACCESO AL ALMACENAMIENTO ---
+// localStorage puede lanzar: con el disco lleno el navegador devuelve QuotaExceededError,
+// y una política que bloquee los datos del sitio hace fallar hasta la lectura.
+// Lo grave no es quedarse sin guardar, es que la excepción sube y corta a media función
+// a quien llamó, que es el único tramo del programa donde un error se vuelve un dato
+// inventado. Sin esto: al escanear, la tarima quedaba en el arreglo pero sin dibujar y
+// con los campos llenos, así que el operador la reescaneaba y salían tarimas repetidas
+// en el Excel; al cargar, impedía que corriera renderizarTrailer() y la app arrancaba en
+// blanco con el avance guardado sin leer; al cancelar, dejaba el mapa mostrando tarimas
+// que ya no existían.
+let avisoAlmacenDado = false;
+
+function avisarAlmacenCaido() {
+    // Una sola vez por sesión: guardarEstado corre en CADA tecla del campo de título, y
+    // sin la bandera el aviso no se iría de la pantalla mientras se escribe.
+    if (avisoAlmacenDado) return;
+    avisoAlmacenDado = true;
+    mostrarAviso('No se pudo guardar el avance en este navegador.\n\nLo capturado sigue en pantalla y puedes exportar, pero si recargas la página se perderá.');
+}
+
+function leerAlmacen(llave) {
+    try {
+        return localStorage.getItem(llave);
+    } catch (error) {
+        // Arrancar vacío es lo correcto aquí, y no se avisa: no hay nada que el operador
+        // pueda hacer al respecto y el primer guardado ya le dirá que no se está guardando.
+        console.error('No se pudo leer del almacenamiento:', error);
+        return null;
+    }
+}
+
+// Devuelve si logró escribir. Quien ofrece deshacer un borrado necesita saberlo para no
+// prometer una restauración que no va a poder cumplir.
+function escribirAlmacen(llave, valor) {
+    try {
+        localStorage.setItem(llave, valor);
+        return true;
+    } catch (error) {
+        console.error('No se pudo escribir en el almacenamiento:', error);
+        avisarAlmacenCaido();
+        return false;
+    }
+}
+
+function borrarAlmacen(llave) {
+    try {
+        localStorage.removeItem(llave);
+    } catch (error) {
+        console.error('No se pudo borrar del almacenamiento:', error);
+    }
+}
+
 // --- PERSISTENCIA (localStorage) ---
 // Evita perder el trabajo si se refresca la página o el navegador falla a medio conteo.
 function guardarEstado() {
     renumerarPosiciones();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    escribirAlmacen(STORAGE_KEY, JSON.stringify({
         numCaja: inputCaja.value,
         datosTrailer: datosTrailer
     }));
 }
 
+// Pasa al formato actual lo que venga del almacén. Migración: versiones anteriores
+// guardaban un solo material por tarima (Número_Material/Cantidad_Piezas planos) en vez
+// del arreglo Materiales[], y todavía no existía el campo Referencia.
+// Está aparte porque lo usan dos caminos: recuperar el avance al abrir y deshacer un
+// borrado. Ambos leen texto guardado por una versión que puede no ser la de hoy.
+function normalizarTarimas(datosCrudos) {
+    if (!Array.isArray(datosCrudos)) return [];
+
+    return datosCrudos.map(function(tarima) {
+        const materiales = Array.isArray(tarima.Materiales)
+            ? tarima.Materiales
+            : [{
+                Número_Material: tarima.Número_Material,
+                Cantidad_Piezas: tarima.Cantidad_Piezas
+            }];
+
+        return {
+            Posición_Tráiler: tarima.Posición_Tráiler,
+            Materiales: materiales.map(function(m) {
+                return {
+                    Número_Material: m.Número_Material,
+                    Cantidad_Piezas: m.Cantidad_Piezas,
+                    Referencia: m.Referencia || ''
+                };
+            })
+        };
+    });
+}
+
 function cargarEstado() {
-    const guardado = localStorage.getItem(STORAGE_KEY);
+    const guardado = leerAlmacen(STORAGE_KEY);
     if (!guardado) return;
 
     try {
         const estado = JSON.parse(guardado);
         inputCaja.value = estado.numCaja || '';
-        const datosCrudos = Array.isArray(estado.datosTrailer) ? estado.datosTrailer : [];
-
-        // Migración: versiones anteriores guardaban un solo material por tarima
-        // (Número_Material/Cantidad_Piezas planos) en vez del arreglo Materiales[],
-        // y todavía no existía el campo Referencia.
-        datosTrailer = datosCrudos.map(function(tarima) {
-            const materiales = Array.isArray(tarima.Materiales)
-                ? tarima.Materiales
-                : [{
-                    Número_Material: tarima.Número_Material,
-                    Cantidad_Piezas: tarima.Cantidad_Piezas
-                }];
-
-            return {
-                Posición_Tráiler: tarima.Posición_Tráiler,
-                Materiales: materiales.map(function(m) {
-                    return {
-                        Número_Material: m.Número_Material,
-                        Cantidad_Piezas: m.Cantidad_Piezas,
-                        Referencia: m.Referencia || ''
-                    };
-                })
-            };
-        });
+        datosTrailer = normalizarTarimas(estado.datosTrailer);
     } catch (error) {
         console.error('Error al recuperar el progreso guardado:', error);
-        localStorage.removeItem(STORAGE_KEY);
+        borrarAlmacen(STORAGE_KEY);
     }
 }
 
@@ -246,7 +304,7 @@ function mostrarAviso(texto) {
     aviso.dataset.texto = texto;
     aviso.innerText = texto;
 
-    // Poder cerrarlo de un clic: 3 s tapando la esquina estorban si ya se leyó
+    // Poder cerrarlo de un clic: 3 s tapando la pantalla estorban si ya se leyó
     aviso.addEventListener('click', function() { cerrarAviso(aviso); });
 
     contenedorAvisos.appendChild(aviso);
@@ -1084,7 +1142,7 @@ document.getElementById('btnCancelar').addEventListener('click', function() {
         cerrarFormulario();
 
         // Borrar también el progreso guardado
-        localStorage.removeItem(STORAGE_KEY);
+        borrarAlmacen(STORAGE_KEY);
 
         // Limpiar los campos de captura
         inputCaja.value = '';
