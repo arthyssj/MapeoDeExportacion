@@ -3,7 +3,7 @@
 ![image Main](Screenshot.png)
 ![image Main](Screenshot-2.png)
 
-Herramienta web para mapear la carga de un tráiler de exportación a **DSV**.
+Herramienta web para mapear la carga de un tráiler de exportación.
 
 Permite registrar con lector de código de barras qué material va en cada tarima y en qué
 posición del tráiler, y genera un archivo de Excel con el mapa de la caja, un resumen por
